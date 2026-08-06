@@ -1,0 +1,15 @@
+{
+  "name": "mturk-monitoring-server",
+  "version": "1.0.0",
+  "description": "Central dashboard monitoring MTurk Worker sessions across multiple RDPs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.1"
+  },
+  "author": "",
+  "license": "ISC"
+}

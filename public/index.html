@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sphinx Portal</title>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ==========================================================================
+       LOGIN PAGE (Hidden by default when logged in)
+       ========================================================================== -->
+  <div class="auth-page" id="auth-page">
+    <!-- Left Hero Scene -->
+    <div class="auth-hero">
+      <div class="hero-brand">
+        <div class="logo">
+          <div class="logo-mark">
+            <span></span>
+          </div>
+          <span style="font-weight: 700; color: #fff; font-size: 32px; letter-spacing: -1px;">Sphinx</span>
+        </div>
+      </div>
+      
+      <div class="hero-scene">
+        <!-- Floating Ambient Glows -->
+        <div class="hero-glow hero-glow-a"></div>
+        <div class="hero-glow hero-glow-b"></div>
+        
+        <!-- Animated Golden Sphinx Orb -->
+        <div class="royal-model-wrap">
+          <div class="royal-orb">
+            <div class="royal-orb-core"></div>
+            <div class="royal-orb-ring royal-orb-ring-a"></div>
+            <div class="royal-orb-ring royal-orb-ring-b"></div>
+          </div>
+          <div class="royal-plinth">
+            <div class="plinth-top"></div>
+            <div class="plinth-face"></div>
+          </div>
+        </div>
+
+        <!-- Background concentric rings -->
+        <div class="hero-ring hero-ring-a"></div>
+        <div class="hero-ring hero-ring-b"></div>
+
+        <!-- Glass card overlays -->
+        <div class="hero-card">
+          <div class="hero-card-line"></div>
+          <div class="hero-card-line short"></div>
+          <div class="hero-card-line faint"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Login Form -->
+    <div class="auth-form-wrap">
+      <form class="auth-form" id="login-form">
+        <h1>Welcome Back</h1>
+        <p>Log in to access your Sphinx command console.</p>
+        
+        <!-- Error Banner -->
+        <div class="message-banner error" id="login-error-banner" style="display: none;"></div>
+        
+        <label class="field">
+          <span>Email Address</span>
+          <input type="email" id="login-email" required placeholder="e.g. testcompany@gmail.com">
+        </label>
+        
+        <label class="field">
+          <span>Password</span>
+          <input type="password" id="login-password" required placeholder="••••••••">
+        </label>
+        
+        <div class="auth-row">
+          <label class="checkbox">
+            <input type="checkbox" checked>
+            <span>Remember me</span>
+          </label>
+          <a href="#">Forgot password?</a>
+        </div>
+        
+        <button type="submit" class="primary-button" id="login-submit-btn">Login</button>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- ==========================================================================
+       MAIN APP LAYOUT (Visible when logged in)
+       ========================================================================== -->
+  <div class="app-layout" id="app-layout" style="display: none;">
+    <!-- Left Navigation Sidebar -->
+    <aside class="sidebar">
+      <div class="logo" style="color: var(--heading); font-size: 24px; font-weight: 700; margin-bottom: 24px;">
+        <div class="logo-mark">
+          <span></span>
+        </div>
+        <span>Sphinx</span>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="#/home" class="nav-item" id="nav-home">Home</a>
+        <a href="#/dashboard-status" class="nav-item" id="nav-dashboard-status">Dashboard</a>
+        
+        <!-- Accounts Submenu -->
+        <div>
+          <a href="#/accounts" class="nav-item" id="nav-accounts">Accounts</a>
+          <div class="nav-children">
+            <a href="#/accounts" class="nav-item sub-item" id="subnav-accounts-list">List</a>
+            <a href="#/accounts/add" class="nav-item sub-item" id="subnav-accounts-add">Add</a>
+          </div>
+        </div>
+
+        <!-- TaskTypes Submenu -->
+        <div>
+          <a href="#/tasktypes" class="nav-item" id="nav-tasktypes">TaskTypes</a>
+          <div class="nav-children">
+            <a href="#/tasktypes" class="nav-item sub-item" id="subnav-tasktypes-list">List</a>
+            <a href="#/tasktypes/add" class="nav-item sub-item" id="subnav-tasktypes-add">Add</a>
+          </div>
+        </div>
+
+        <a href="#/taskgroup" class="nav-item" id="nav-taskgroup">TaskGroup</a>
+        <a href="#/my-hits" class="nav-item" id="nav-my-hits">All Hits</a>
+        
+        <!-- Users Submenu -->
+        <div>
+          <a href="#/users/list" class="nav-item" id="nav-users">Users</a>
+          <div class="nav-children">
+            <a href="#/users/list" class="nav-item sub-item" id="subnav-users-list">List</a>
+            <a href="#/users/add" class="nav-item sub-item" id="subnav-users-add">Add</a>
+          </div>
+        </div>
+
+        <a href="#/accounts-status" class="nav-item" id="nav-accounts-status">Accounts Status</a>
+        <a href="#/delete-by-date" class="nav-item" id="nav-delete-by-date">Delete data</a>
+      </nav>
+    </aside>
+
+    <!-- Right Main Area -->
+    <main class="main-area">
+      <!-- Topbar Header -->
+      <div class="topbar-shell">
+        <div class="topbar-blank">
+          <div class="connection-status">
+            <span class="status-indicator-dot online" id="server-status-dot"></span>
+            <span class="status-indicator-text" id="server-status-text">Synchronized with database</span>
+          </div>
+        </div>
+        <div class="profile-area">
+          <button class="profile-chip" id="profile-menu-trigger">
+            <div class="profile-avatar" id="profile-initials">A</div>
+            <div class="profile-dot"></div>
+          </button>
+          
+          <!-- Dropdown Profile Menu -->
+          <div class="profile-menu" id="profile-menu" style="display: none;">
+            <div class="profile-menu-head">
+              <div>
+                <strong id="profile-menu-name">Administrator</strong>
+                <small id="profile-menu-email" style="color: var(--text);">admin@mayohn.com</small>
+              </div>
+            </div>
+            <div style="padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; text-align: left;">
+              <a href="#/profile" style="padding: 8px 16px; color: var(--text); font-size: 13px; font-weight: 500; text-decoration: none; display: block; text-align: left;">My Profile</a>
+              <a href="#/change-password" style="padding: 8px 16px; color: var(--text); font-size: 13px; font-weight: 500; text-decoration: none; display: block; text-align: left;">Change Password</a>
+            </div>
+            <button id="logout-btn" class="logout-button">Logout</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Broadcast Alert Notification Banner (pops up at top of content when HIT is caught) -->
+      <div class="message-banner success" id="hit-caught-banner" style="display: none; animation: slide-in 0.3s ease;">
+        <strong>New HIT Broadcast:</strong> <span id="hit-caught-text"></span>
+      </div>
+
+      <!-- Action status banners (API call updates) -->
+      <div class="message-banner success" id="api-success-banner" style="display: none;"></div>
+      <div class="message-banner error" id="api-error-banner" style="display: none;"></div>
+
+
+      <!-- ==========================================================================
+           TAB VIEWS
+           ========================================================================== -->
+
+      <!-- 1. Home View -->
+      <div class="tab-view" id="view-home" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Dashboard Summary</h2>
+          </div>
+          <div class="panel-body">
+            <div style="font-size: 14px; line-height: 1.8; color: #5f6368; padding: 10px 0; text-align: left;">
+              <div style="font-weight: 500; margin-bottom: 4px; color: #5f6368;">Processing Workers IDs:</div>
+              <div id="home-processing-text" style="color: #9e9e9e; margin-bottom: 16px; font-weight: 500;">No processing workers</div>
+              
+              <div style="font-weight: 500; margin-bottom: 4px; color: #5f6368;">Expired Workers IDs:</div>
+              <div id="home-expired-text" style="color: #9e9e9e; margin-bottom: 24px; font-weight: 500;">No expired workers</div>
+              
+              <div id="home-user-email" style="font-weight: 500; border-top: 1px solid var(--border); padding-top: 16px; color: #5f6368; font-size: 13px;">testcompany@gmail.com</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Dashboard Status View -->
+      <div class="tab-view" id="view-dashboard-status" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>Dashboard Status</h2>
+            <input type="text" class="search-input" id="search-dashboard" placeholder="Search Workers...">
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr id="cols-dashboard">
+                    <th>S.No</th>
+                    <th>Worker Name</th>
+                    <th>Next Payment</th>
+                    <th>Last Payment</th>
+                    <th>Payment Amount</th>
+                    <th>Status</th>
+                    <th>Date</th>
+                    <th>SUBTD</th>
+                    <th>APPRD</th>
+                    <th>REJTD</th>
+                    <th>PNDNG</th>
+                    <th>REWRD</th>
+                    <th>BONUS</th>
+                    <th>TOTAL</th>
+                    <th>ERNGS</th>
+                    <th>TTL APRVD</th>
+                    <th>APRVD RATE</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-dashboard">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. Accounts List View -->
+      <div class="tab-view" id="view-accounts" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>Accounts List</h2>
+            <input type="text" class="search-input" id="search-accounts" placeholder="Search Accounts...">
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Worker ID</th>
+                    <th>Worker Name</th>
+                    <th>Email</th>
+                    <th>Next Payment</th>
+                    <th>Last Payment</th>
+                    <th>Payment Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-accounts">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4. Add/Edit Account View -->
+      <div class="tab-view" id="view-accounts-add" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 id="account-form-title">Add Account</h2>
+          </div>
+          <div class="panel-body">
+            <form id="account-form">
+              <input type="hidden" id="account-form-id">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Worker ID *</span>
+                  <input type="text" id="acc-workerId" required placeholder="e.g. A3ABC123XYZ456">
+                </label>
+                
+                <label class="field">
+                  <span>Worker Name *</span>
+                  <input type="text" id="acc-workerName" required placeholder="e.g. RDP-Worker-01">
+                </label>
+                
+                <label class="field">
+                  <span>Email *</span>
+                  <input type="email" id="acc-email" required placeholder="e.g. worker1@mayohn.com">
+                </label>
+                
+                <label class="field">
+                  <span>Payment Amount ($)</span>
+                  <input type="number" step="0.01" id="acc-paymentAmount" placeholder="e.g. 50.00" value="0.00">
+                </label>
+
+                <label class="field">
+                  <span>Last Payment Date</span>
+                  <input type="date" id="acc-lastPayment">
+                </label>
+
+                <label class="field">
+                  <span>Next Payment Date</span>
+                  <input type="date" id="acc-nextPayment">
+                </label>
+
+                <label class="field">
+                  <span>Status</span>
+                  <select id="acc-status">
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="ghost-button" onclick="window.location.hash='#/accounts'">Cancel</button>
+                <button type="submit" class="primary-button small" id="account-submit-btn">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. TaskTypes List View -->
+      <div class="tab-view" id="view-tasktypes" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>Task Types</h2>
+            <button class="primary-button small" onclick="window.location.hash='#/tasktypes/add'">Add Type</button>
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll" style="min-width: unset;">
+              <table style="min-width: unset;">
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">ID</th>
+                    <th>TITLE</th>
+                    <th>TASK URL</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-tasktypes">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6. Add TaskType View -->
+      <div class="tab-view" id="view-tasktypes-add" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Add Task Type</h2>
+          </div>
+          <div class="panel-body">
+            <form id="tasktype-form">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Title *</span>
+                  <input type="text" id="tasktype-title" required placeholder="e.g. RM results">
+                </label>
+                <label class="field">
+                  <span>Task URL *</span>
+                  <input type="text" id="tasktype-url" required placeholder="e.g. 3USMLONCAHFXCDN7JZ023R83PA5B3">
+                </label>
+                <label class="field" style="grid-column: span 2;">
+                  <span>Status</span>
+                  <input type="text" id="tasktype-status" value="Active" placeholder="e.g. Active">
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="ghost-button" onclick="window.location.hash='#/tasktypes'">Cancel</button>
+                <button type="submit" class="primary-button small">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7. TaskGroup Configuration View -->
+      <div class="tab-view" id="view-taskgroup" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>TaskGroup Settings</h2>
+          </div>
+          <form id="taskgroup-form">
+            <div class="taskgroup-toolbar">
+              <div class="taskgroup-status">
+                <label class="toggle">
+                  <input type="checkbox" id="taskgroup-status-toggle">
+                  <span class="toggle-track"></span>
+                </label>
+                <span style="font-weight: 500;">Catcher Crawler Status</span>
+              </div>
+            </div>
+            
+            <!-- target URL list and dropdowns -->
+            <div class="taskgroup-grid" style="padding: 18px 22px;">
+              <!-- URL 1 -->
+              <div class="taskgroup-row">
+                <label class="field">
+                  <span>URL 1</span>
+                  <input type="text" id="taskgroup-url1" placeholder="e.g. worker.mturk.com/projects/3XYZ/tasks">
+                </label>
+                <label class="field">
+                  <span>TaskType for URL 1</span>
+                  <select id="taskgroup-url1Name">
+                    <option value="">Select TaskType</option>
+                  </select>
+                </label>
+              </div>
+              <!-- URL 2 -->
+              <div class="taskgroup-row">
+                <label class="field">
+                  <span>URL 2</span>
+                  <input type="text" id="taskgroup-url2" placeholder="e.g. worker.mturk.com/projects/4ABC/tasks">
+                </label>
+                <label class="field">
+                  <span>TaskType for URL 2</span>
+                  <select id="taskgroup-url2Name">
+                    <option value="">Select TaskType</option>
+                  </select>
+                </label>
+              </div>
+              <!-- URL 3 -->
+              <div class="taskgroup-row">
+                <label class="field">
+                  <span>URL 3</span>
+                  <input type="text" id="taskgroup-url3" placeholder="e.g. worker.mturk.com/projects/5MNO/tasks">
+                </label>
+                <label class="field">
+                  <span>TaskType for URL 3</span>
+                  <select id="taskgroup-url3Name">
+                    <option value="">Select TaskType</option>
+                  </select>
+                </label>
+              </div>
+              <!-- URL 4 -->
+              <div class="taskgroup-row">
+                <label class="field">
+                  <span>URL 4</span>
+                  <input type="text" id="taskgroup-url4" placeholder="e.g. worker.mturk.com/projects/6QRS/tasks">
+                </label>
+                <label class="field">
+                  <span>TaskType for URL 4</span>
+                  <select id="taskgroup-url4Name">
+                    <option value="">Select TaskType</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div class="taskgroup-subhead" style="padding: 0 22px; font-weight: 600; color: var(--heading);">Survey Settings:</div>
+            
+            <div class="taskgroup-grid" style="padding: 12px 22px 22px 22px;">
+              <div class="taskgroup-row">
+                <label class="field">
+                  <span>Min Reward ($)</span>
+                  <input type="number" step="0.01" id="taskgroup-minReward" placeholder="0.01">
+                </label>
+                <label class="field">
+                  <span>Interval (Seconds)</span>
+                  <input type="number" id="taskgroup-interval" placeholder="60">
+                </label>
+              </div>
+              <div class="taskgroup-row">
+                <label class="field taskgroup-textarea" style="grid-column: span 2;">
+                  <span>Banned Requesters List (Comma-separated names)</span>
+                  <textarea id="taskgroup-bannedRequesters" placeholder="e.g. RequesterA, RequesterB"></textarea>
+                </label>
+              </div>
+            </div>
+            
+            <div class="form-actions taskgroup-update-actions" style="padding: 0 22px 22px 22px;">
+              <button type="submit" class="primary-button small">Update Settings</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 8. Caught Hits (All Hits) List View -->
+      <div class="tab-view" id="view-my-hits" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>All Hits Caught</h2>
+            <input type="text" class="search-input" id="search-hits" placeholder="Search Hits...">
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 80px;">S.NO</th>
+                    <th>WORKER NAME</th>
+                    <th>TASK</th>
+                    <th>REQUESTER</th>
+                    <th>REWARD</th>
+                    <th>TIME REMAINING</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-hits">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 9. Users (Employees) List View -->
+      <div class="tab-view" id="view-users-list" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>Users List</h2>
+            <input type="text" class="search-input" id="search-users" placeholder="Search Users...">
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 50px;"><input type="checkbox"></th>
+                    <th>NAME</th>
+                    <th>EMAIL</th>
+                    <th>PHONE</th>
+                    <th>STATUS</th>
+                    <th>ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-users">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 10. Add/Edit User View -->
+      <div class="tab-view" id="view-users-add" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2 id="user-form-title">Add User</h2>
+          </div>
+          <div class="panel-body">
+            <form id="user-form">
+              <input type="hidden" id="user-form-id">
+              <div class="form-grid">
+                <label class="field">
+                  <span>Full Name *</span>
+                  <input type="text" id="usr-name" required placeholder="e.g. John Doe">
+                </label>
+                
+                <label class="field">
+                  <span>Email Address *</span>
+                  <input type="email" id="usr-email" required placeholder="e.g. john@mayohn.com">
+                </label>
+                
+                <label class="field">
+                  <span>Password *</span>
+                  <input type="password" id="usr-password" placeholder="••••••••">
+                </label>
+                
+                <label class="field">
+                  <span>Mobile Number</span>
+                  <input type="text" id="usr-mobile" placeholder="e.g. 9876543210">
+                </label>
+
+                <label class="field tall" style="grid-column: span 2;">
+                  <span>Physical Address</span>
+                  <textarea id="usr-address" placeholder="e.g. Chennai Office, Floor 3"></textarea>
+                </label>
+              </div>
+              <div class="form-actions">
+                <button type="button" class="ghost-button" onclick="window.location.hash='#/users/list'">Cancel</button>
+                <button type="submit" class="primary-button small" id="user-submit-btn">Create</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- 11. Accounts Status (Extensions Heartbeat) View -->
+      <div class="tab-view" id="view-accounts-status" style="display: none;">
+        <div class="panel table-panel">
+          <div class="panel-header table-header">
+            <h2>Accounts Status</h2>
+            <input type="text" class="search-input" id="search-accounts-status" placeholder="Search Status...">
+          </div>
+          <div class="panel-body">
+            <div class="table-scroll" style="min-width: unset;">
+              <table style="min-width: unset;">
+                <thead>
+                  <tr>
+                    <th>Worker ID</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="table-body-accounts-status">
+                  <!-- Filled dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 12. Delete Data by Date View -->
+      <div class="tab-view" id="view-delete-by-date" style="display: none;">
+        <div class="panel">
+          <div class="panel-header">
+            <h2>Delete historical logs by Date</h2>
+          </div>
+          <div class="panel-body">
+            <form id="delete-date-form">
+              <div class="form-grid">
+                <label class="field tall" style="grid-column: span 2;">
+                  <span>Select Date to Wipe *</span>
+                  <input type="date" id="delete-target-date" required>
+                </label>
+              </div>
+              <div class="form-actions" style="justify-content: flex-start; margin-top: 14px;">
+                <button type="submit" class="danger-button">Purge Records</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer">
+        &copy; 2026 Mayohn Infotech. All rights reserved.
+      </footer>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

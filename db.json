@@ -1,0 +1,110 @@
+{
+  "users": [
+    {
+      "id": "usr_1",
+      "_id": "usr_1",
+      "name": "Administrator",
+      "email": "testcompany@gmail.com",
+      "password": "password",
+      "mobileNumber": "9988776655",
+      "address": "Mayohn Command Center, Chennai, India",
+      "status": "Active"
+    }
+  ],
+  "accounts": [
+    {
+      "id": "acc_1",
+      "_id": "acc_1",
+      "workerId": "A3ABC123XYZ456",
+      "workerName": "RDP-Worker-01",
+      "email": "worker1@mayohn.com",
+      "nextPayment": "2026-08-13",
+      "lastPayment": "2026-08-06",
+      "paymentAmount": 50,
+      "status": "Active"
+    },
+    {
+      "id": "acc_1786039147950",
+      "_id": "acc_1786039147950",
+      "workerId": "A162UWKBA28QIT",
+      "workerName": "Unknown-RDP",
+      "email": "unknown-rdp@mayohn-rdp.com",
+      "nextPayment": "-",
+      "lastPayment": "-",
+      "paymentAmount": 0,
+      "status": "Active"
+    }
+  ],
+  "tasktypes": [
+    "Survey",
+    "Research",
+    "Transcription",
+    "Data Labeling"
+  ],
+  "taskgroup": {
+    "status": false,
+    "url1": "",
+    "url1Name": "",
+    "url2": "",
+    "url2Name": "",
+    "url3": "",
+    "url3Name": "",
+    "url4": "",
+    "url4Name": "",
+    "minReward": "0.01",
+    "interval": 60,
+    "bannedRequesters": ""
+  },
+  "hits": [
+    {
+      "id": "hit_1",
+      "_id": "hit_1",
+      "workerName": "RDP-Worker-01",
+      "task": "https://worker.mturk.com/projects/3XYZ/tasks",
+      "requester": "Academic Studies Group",
+      "reward": 1.5,
+      "status": "Active",
+      "timeRemaining": "45 Min",
+      "timestamp": 1786022921977
+    },
+    {
+      "id": "hit_1786022963372",
+      "_id": "hit_1786022963372",
+      "workerName": "RDP-Worker-01",
+      "task": "Survey about consumer behavior and social media habits",
+      "requester": "Behavioral Sciences Lab",
+      "reward": 2.5,
+      "status": "Active",
+      "timeRemaining": "60 Min",
+      "timestamp": 1786022963372
+    },
+    {
+      "id": "hit_1786022965374",
+      "_id": "hit_1786022965375",
+      "workerName": "RDP-Worker-01",
+      "task": "Decision making game on financial choices",
+      "requester": "Decision Group",
+      "reward": 5,
+      "status": "Active",
+      "timeRemaining": "60 Min",
+      "timestamp": 1786022965375
+    }
+  ],
+  "accountsStatus": [
+    {
+      "workerId": "A3ABC123XYZ456",
+      "status": "offline",
+      "lastSeen": 1786022969506
+    },
+    {
+      "workerId": "Unknown-ID",
+      "status": "offline",
+      "lastSeen": 1786039314541
+    },
+    {
+      "workerId": "A162UWKBA28QIT",
+      "status": "offline",
+      "lastSeen": 1786041635736
+    }
+  ]
+}

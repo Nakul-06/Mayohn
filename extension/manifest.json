@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "MTurk RDP Monitor Agent",
+  "version": "1.0",
+  "description": "Monitors MTurk session stats and relays them to the centralized dashboard.",
+  "permissions": [
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://worker.mturk.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://worker.mturk.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
