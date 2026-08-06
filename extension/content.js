@@ -115,6 +115,91 @@ function checkForNewHitNotification() {
 
 // Scrape on load
 scrapeMTurkPage();
+scrapeHitsQueue();
 
 // Periodic scrape while page is open (every 10 seconds)
 setInterval(scrapeMTurkPage, 10000);
+setInterval(scrapeHitsQueue, 10000);
+
+// Scrapes the active queue list on worker.mturk.com/tasks
+function scrapeHitsQueue() {
+  try {
+    const path = window.location.pathname;
+    if (!path.includes('/tasks') && !path.includes('/my_tasks') && !path.includes('/projects')) {
+      return;
+    }
+    
+    // Find all links containing /projects/ and /tasks
+    const links = Array.from(document.querySelectorAll('a')).filter(a => {
+      const href = a.getAttribute('href') || '';
+      return href.includes('/projects/') && href.includes('/tasks');
+    });
+
+    const discoveredHits = [];
+
+    links.forEach(link => {
+      try {
+        const href = link.getAttribute('href') || '';
+        const match = href.match(/\/projects\/([A-Z0-9]{12,45})\/tasks/i);
+        if (!match) return;
+        const groupId = match[1];
+
+        // Traverse up to find parent container card or table row
+        let row = link.parentElement;
+        let depth = 0;
+        while (row && depth < 10) {
+          if (row.innerText.includes('$') && (row.innerText.toLowerCase().includes('remaining') || row.innerText.toLowerCase().includes('min'))) {
+            break;
+          }
+          row = row.parentElement;
+          depth++;
+        }
+
+        if (!row) return;
+        const text = row.innerText;
+
+        // Parse reward (e.g. $0.05)
+        const rewardMatch = text.match(/\$[0-9.]+/);
+        const reward = rewardMatch ? rewardMatch[0] : '$0.00';
+
+        // Parse requester
+        let requester = 'Unknown Requester';
+        const reqLink = Array.from(row.querySelectorAll('a')).find(a => {
+          const h = a.getAttribute('href') || '';
+          return h.includes('requester_id') || h.includes('requesters');
+        });
+        if (reqLink) {
+          requester = reqLink.innerText.trim();
+        } else {
+          const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+          if (lines.length > 0) requester = lines[0];
+        }
+
+        // Parse time remaining
+        let timeRemaining = '60 Min';
+        const timeMatch = text.match(/\d+\s*m(in)?s?\s*\d*\s*s?(ec)?s?|\d+\s*h(our)?s?\s*\d*\s*m(in)?s?/i);
+        if (timeMatch) {
+          timeRemaining = timeMatch[0].trim();
+        }
+
+        discoveredHits.push({
+          groupId,
+          requester,
+          reward,
+          timeRemaining
+        });
+      } catch (e) {
+        // Safe skip
+      }
+    });
+
+    if (discoveredHits.length > 0) {
+      chrome.runtime.sendMessage({
+        type: 'queue_hits_discovered',
+        hits: discoveredHits
+      });
+    }
+  } catch (err) {
+    console.error('[MTurk Agent] Error in scrapeHitsQueue:', err);
+  }
+}

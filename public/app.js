@@ -262,18 +262,12 @@ function connectWebSocket() {
       } 
       
       else if (data.type === 'hit_alert') {
-        // Live banner notification
-        const msg = `${data.rdpName} caught a HIT paying ${data.notification.payout}!`;
-        hitCaughtText.textContent = msg;
-        hitCaughtBanner.style.display = 'block';
-        
         // Sound and TTS Alerts
         playChime();
         setTimeout(() => playVoiceAlert(`${data.rdpName.replace('-', ' ')} caught a HIT paying ${data.notification.payout}`), 550);
         
-        setTimeout(() => {
-          hitCaughtBanner.style.display = 'none';
-        }, 5000);
+        // Show custom toast notification
+        showHitToast('New HITs available!');
 
         // If All Hits tab is open, reload it
         if (window.location.hash === '#/my-hits' || window.location.hash === '#/home') {
@@ -295,6 +289,59 @@ function connectWebSocket() {
     }
     setTimeout(connectWebSocket, 3000);
   };
+}
+
+// Show custom toast notification in top-right
+function showHitToast(msg) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    background: #ffffff;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    padding: 16px;
+    min-width: 320px;
+    max-width: 400px;
+    display: flex;
+    align-items: center;
+    position: relative;
+    border-left: 4px solid #7465f4;
+    animation: slide-in-toast 0.3s ease-out;
+    overflow: hidden;
+    pointer-events: auto;
+  `;
+
+  toast.innerHTML = `
+    <!-- Icon -->
+    <div style="background: #eef2f6; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; margin-right: 12px; flex-shrink: 0;">
+      <span style="color: #7465f4; font-size: 13px; font-weight: bold; font-family: monospace;">i</span>
+    </div>
+    
+    <!-- Text -->
+    <div style="font-size: 14px; font-weight: 500; color: #3c4043; flex-grow: 1; text-align: left;">
+      🔔 ${msg || 'New HITs available!'}
+    </div>
+    
+    <!-- Close Button -->
+    <button onclick="this.parentElement.remove()" style="background: none; border: none; font-size: 20px; color: #9e9e9e; cursor: pointer; padding: 0 0 0 10px; line-height: 1; flex-shrink: 0; font-family: sans-serif;">&times;</button>
+    
+    <!-- Progress Indicator Bar -->
+    <div style="position: absolute; bottom: 0; left: 0; height: 3px; background: #7465f4; width: 100%; animation: toast-progress 5s linear forwards;"></div>
+  `;
+
+  container.appendChild(toast);
+
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.animation = 'slide-out-toast 0.3s ease-in forwards';
+      setTimeout(() => {
+        if (toast.parentElement) toast.remove();
+      }, 300);
+    }
+  }, 5000);
 }
 
 // Toggle Sound preference

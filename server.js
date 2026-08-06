@@ -620,6 +620,46 @@ wss.on('connection', (ws, req) => {
             }
           });
         }
+        
+        else if (data.type === 'queue_hits') {
+          const acc = db.accounts.find(a => a.workerId === workerId) || { workerName: rdpName };
+          let changed = false;
+          
+          data.hits.forEach(qHit => {
+            const exists = db.hits.some(h => h.task === qHit.groupId && h.workerName === acc.workerName);
+            if (!exists) {
+              const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
+              const newHit = {
+                id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                _id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                workerName: acc.workerName,
+                task: qHit.groupId,
+                requester: qHit.requester,
+                reward: payoutVal,
+                status: 'Active',
+                timeRemaining: qHit.timeRemaining,
+                timestamp: Date.now()
+              };
+              db.hits.push(newHit);
+              changed = true;
+              
+              broadcastToDashboards({
+                type: 'hit_alert',
+                rdpName: acc.workerName,
+                workerId: workerId,
+                notification: {
+                  time: new Date().toLocaleTimeString(),
+                  message: newHit.task,
+                  payout: `$${payoutVal.toFixed(2)}`
+                }
+              });
+            }
+          });
+          
+          if (changed) {
+            saveDB();
+          }
+        }
       } catch (err) {
         console.error('Error handling WebSocket message:', err);
       }

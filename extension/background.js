@@ -120,6 +120,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } 
   
+  else if (message.type === 'queue_hits_discovered') {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'queue_hits',
+        hits: message.hits
+      }));
+    }
+  } 
+  
   else if (message.type === 'settings_updated') {
     loadSettings(() => {
       // Close active socket to reconnect with new settings/RDP Name
