@@ -638,7 +638,7 @@ async function viewTaskTypesList() {
           <td style="font-weight:600; color:var(--heading);">${type.title}</td>
           <td style="font-family:monospace; color:#5f6368; font-size:13px;">${type.taskUrl || '-'}</td>
           <td>
-            <span style="color: ${isActive ? '#10b981' : '#ef4444'}; font-weight:600; font-size:13px;">
+            <span style="color: ${isActive ? '#10b981' : '#ef4444'}; font-weight:600; font-size:13px; cursor:pointer; text-decoration:underline;" onclick="toggleTaskTypeStatus(${type.id})">
               ${type.status || 'Active'}
             </span>
           </td>
@@ -660,6 +660,16 @@ async function deleteTaskType(id) {
   try {
     await fetchAPI(`/tasktypes/${id}`, { method: 'DELETE' });
     showBanner(apiSuccessBanner, 'TaskType deleted');
+    viewTaskTypesList();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+// Toggle Task Type Status (Active / Inactive)
+async function toggleTaskTypeStatus(id) {
+  try {
+    await fetchAPI(`/tasktypes/${id}/toggle`, { method: 'POST' });
     viewTaskTypesList();
   } catch (err) {
     console.error(err);
@@ -700,11 +710,25 @@ async function viewTaskGroupSettings() {
     taskTypesList = typesRes.items || [];
     
     const selects = ['taskgroup-url1Name', 'taskgroup-url2Name', 'taskgroup-url3Name', 'taskgroup-url4Name'];
-    selects.forEach(id => {
-      const el = document.getElementById(id);
-      el.innerHTML = '<option value="">Select TaskType</option>' + taskTypesList.map(t => `
+    const activeTypes = taskTypesList.filter(t => (t.status || 'Active').toLowerCase() === 'active');
+    
+    selects.forEach((id, idx) => {
+      const selectEl = document.getElementById(id);
+      const urlInputEl = document.getElementById(`taskgroup-url${idx + 1}`);
+      
+      selectEl.innerHTML = `<option value="">Select URL ${idx + 1}</option>` + activeTypes.map(t => `
         <option value="${t.title}">${t.title}</option>
       `).join('');
+      
+      selectEl.onchange = (e) => {
+        const selectedVal = e.target.value;
+        const matched = taskTypesList.find(t => t.title === selectedVal);
+        if (matched) {
+          urlInputEl.value = matched.taskUrl || '';
+        } else {
+          urlInputEl.value = '';
+        }
+      };
     });
 
     // Fetch active taskgroup config

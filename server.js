@@ -31,6 +31,40 @@ app.use((req, res, next) => {
   next();
 });
 
+// Helper to filter caught hits based on active TaskGroup configurations
+function shouldRegisterHit(groupId, requester, reward) {
+  if (!db.taskgroup || !db.taskgroup.status) {
+    return true;
+  }
+  
+  const targetUrls = [
+    db.taskgroup.url1,
+    db.taskgroup.url2,
+    db.taskgroup.url3,
+    db.taskgroup.url4
+  ].filter(Boolean).map(u => u.trim());
+  
+  const isTargetUrl = targetUrls.some(url => {
+    return url === groupId || url.includes(groupId) || groupId.includes(url);
+  });
+  
+  if (isTargetUrl) {
+    return true;
+  }
+  
+  const rewardVal = parseFloat(reward) || 0;
+  const minReward = parseFloat(db.taskgroup.minReward || 0);
+  const isRewardValid = rewardVal >= minReward;
+  
+  let isNotBanned = true;
+  if (db.taskgroup.bannedRequesters) {
+    const banned = db.taskgroup.bannedRequesters.toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
+    isNotBanned = !banned.includes(requester.toLowerCase());
+  }
+  
+  return isRewardValid && isNotBanned;
+}
+
 // ==========================================================================
 // LOCAL DATABASE ENGINE (db.json)
 // ==========================================================================
@@ -354,6 +388,18 @@ app.delete('/api/tasktypes/:id', authenticateToken, (req, res) => {
   res.sendStatus(204);
 });
 
+app.post('/api/tasktypes/:id/toggle', authenticateToken, (req, res) => {
+  const id = parseInt(req.params.id);
+  const type = (db.tasktypes || []).find(t => t.id === id);
+  if (type) {
+    type.status = type.status === 'Active' ? 'Inactive' : 'Active';
+    saveDB();
+    res.json(type);
+  } else {
+    res.status(404).json({ message: 'TaskType not found' });
+  }
+});
+
 // 6. TaskGroup Settings
 app.get('/api/taskgroup', authenticateToken, (req, res) => {
   res.json(db.taskgroup);
@@ -592,6 +638,11 @@ wss.on('connection', (ws, req) => {
           // Parse payout value
           const payoutVal = parseFloat((data.notification.payout || '$0.00').replace(/[^0-9.]/g, '')) || 0.00;
 
+          if (!shouldRegisterHit(data.notification.message, data.notification.requester || 'Targeted Requester', payoutVal)) {
+            console.log(`[WebSocket] Skipping caught HIT (does not match TaskGroup criteria): ${data.notification.message}`);
+            return;
+          }
+
           // Save caught HIT directly into the db.json
           const newHit = {
             id: `hit_${Date.now()}`,
@@ -629,6 +680,10 @@ wss.on('connection', (ws, req) => {
             const exists = db.hits.some(h => h.task === qHit.groupId && h.workerName === acc.workerName);
             if (!exists) {
               const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
+              
+              if (!shouldRegisterHit(qHit.groupId, qHit.requester, payoutVal)) {
+                return;
+              }
               const newHit = {
                 id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 _id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
