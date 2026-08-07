@@ -541,6 +541,137 @@ app.delete('/api/delete-by-date', authenticateToken, (req, res) => {
   res.json({ message: `Purged ${prevCount - db.hits.length} records for ${date}` });
 });
 
+// ==========================================================================
+// REMOTE USER SCRIPTS ENDPOINTS (API LOG LOOPS & AUTOLIMIT HANDLERS)
+// ==========================================================================
+app.get('/api/auto-login', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  const { workerId } = req.query;
+  const acc = db.accounts.find(a => a.workerId === workerId);
+  if (!acc || !acc.email || !acc.password) {
+    return res.send(`console.warn('Auto-login: Credentials not found for workerId: ${workerId}');`);
+  }
+
+  const jsCode = `
+(function() {
+  console.log('Running Auto-Login script...');
+  const emailInput = document.getElementById('ap_email');
+  const passwordInput = document.getElementById('ap_password');
+  const submitButton = document.getElementById('signInSubmit');
+  
+  if (emailInput && !emailInput.value) {
+    emailInput.value = "${acc.email}";
+    emailInput.dispatchEvent(new Event('input', { bubbles: true }));
+    emailInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (passwordInput && !passwordInput.value) {
+    passwordInput.value = "${acc.password}";
+    passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+    passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  
+  if (emailInput && passwordInput && emailInput.value && passwordInput.value && submitButton) {
+    setTimeout(() => {
+      submitButton.click();
+    }, 1000);
+  }
+})();
+  `;
+  res.send(jsCode);
+});
+
+app.get('/api/auto-fill', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+console.log('HIT Iframe Listener - Remote Autofill Script Loaded');
+  `);
+});
+
+app.get('/api/mturk-script', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+console.log('MTurk Auto Checker - Script Loaded for workerId: ${req.query.workerId}');
+  `);
+});
+
+app.get('/api/tab-manager', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+console.log('MTurk Auto Close Script Loaded');
+(function() {
+  if (window.location.href.includes('submitted=true') || document.body.innerText.includes('Your HIT has been submitted')) {
+    setTimeout(() => {
+      window.close();
+    }, 5000);
+  }
+})();
+  `);
+});
+
+app.get('/api/hit-fetch', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+console.log('MTurk HIT Fetch Script Loaded for workerId: ${req.query.workerId}');
+  `);
+});
+
+app.get('/api/puzzle-detection', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript');
+  res.send(`
+console.log('Puzzle/Captcha Detection Active for workerId: ${req.query.workerId}');
+(function() {
+  setInterval(() => {
+    if (document.querySelector('#cvf-page-content, .captcha, iframe[src*="captcha"]')) {
+      console.warn('Puzzle detected on page!');
+      fetch('/api/check-worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workerId: "${req.query.workerId}", status: "hacked" })
+      });
+    }
+  }, 5000);
+})();
+  `);
+});
+
+app.post('/api/check-worker', (req, res) => {
+  const { workerId, status } = req.body;
+  if (!workerId) return res.status(400).json({ error: 'workerId is required' });
+
+  const targetStatus = status || 'online';
+
+  let statusObj = db.accountsStatus.find(s => s.workerId === workerId);
+  if (!statusObj) {
+    statusObj = { workerId, status: targetStatus, lastSeen: Date.now() };
+    db.accountsStatus.push(statusObj);
+  } else {
+    statusObj.status = targetStatus;
+    statusObj.lastSeen = Date.now();
+  }
+  saveDB();
+  
+  broadcastToDashboards({
+    type: 'worker_status',
+    worker: { workerId, status: targetStatus }
+  });
+
+  res.json({ success: true, message: 'Worker status updated', status: statusObj.status });
+});
+
+app.post('/api/worker-dashboard-detail', (req, res) => {
+  const { workerId, available_earnings } = req.body;
+  if (!workerId) return res.status(400).json({ error: 'workerId is required' });
+
+  const acc = db.accounts.find(a => a.workerId === workerId);
+  if (acc) {
+    acc.availableEarnings = available_earnings ? available_earnings.amount_in_dollars : 0;
+    saveDB();
+  }
+  
+  res.json({ success: true });
+});
+
 
 // ==========================================================================
 // WEBSOCKET CONNECTIONS (FOR MULTIPLE RDPS EXTENSIONS & LIVE DASHBOARDS)
