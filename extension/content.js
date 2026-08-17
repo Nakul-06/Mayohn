@@ -116,10 +116,89 @@ function checkForNewHitNotification() {
 // Scrape on load
 scrapeMTurkPage();
 scrapeHitsQueue();
+scrapeActiveHitDetails();
 
 // Periodic scrape while page is open (every 10 seconds)
 setInterval(scrapeMTurkPage, 10000);
 setInterval(scrapeHitsQueue, 10000);
+setInterval(scrapeActiveHitDetails, 5000);
+
+// Scrapes the details of the active HIT work page (e.g. projects/{groupId}/tasks/{hitId})
+function scrapeActiveHitDetails() {
+  try {
+    const path = window.location.pathname;
+    const match = path.match(/\/projects\/([A-Z0-9]+)\/tasks\/([A-Z0-9]+)/i);
+    if (!match) return;
+    const groupId = match[1];
+    
+    let reward = '$0.00';
+    const rewardEl = document.querySelector('.reward-value, [data-reward], .hit-reward');
+    if (rewardEl) {
+      reward = rewardEl.innerText.trim();
+    } else {
+      const rewardMatch = document.body.innerText.match(/Reward[\s\n]*\$([0-9.]+)/i);
+      if (rewardMatch) reward = `$${rewardMatch[1]}`;
+    }
+
+    let requester = 'Targeted Catcher';
+    const requesterEl = document.querySelector('.requester-name, .requester-value');
+    if (requesterEl) {
+      requester = requesterEl.innerText.trim();
+    } else {
+      const reqMatch = document.body.innerText.match(/Requester[\s\n]+([A-Za-z0-9\s]+)(?:HITs|$)/i);
+      if (reqMatch) requester = reqMatch[1].trim();
+    }
+
+    let timeRemainingStr = 'Calculating...';
+    
+    // Check countdown timer element first
+    const timerEl = document.querySelector('.countdown-timer, .timer, [class*="timer"]');
+    if (timerEl && timerEl.innerText.match(/\d+:\d+/)) {
+      timeRemainingStr = timerEl.innerText.trim();
+    } else {
+      // Fallback: parse elapsed time header
+      const elapsedMatch = document.body.innerText.match(/Time\s*Elapsed[\s\n]*([0-9:]+)[\s\n]*of[\s\n]*(\d+)[\s\n]*Min/i);
+      if (elapsedMatch) {
+        const elapsedStr = elapsedMatch[1];
+        const totalMin = parseInt(elapsedMatch[2], 10);
+        
+        const elapsedParts = elapsedStr.split(':').map(Number);
+        let elapsedSec = 0;
+        if (elapsedParts.length === 2) {
+          elapsedSec = elapsedParts[0] * 60 + elapsedParts[1];
+        } else if (elapsedParts.length === 3) {
+          elapsedSec = elapsedParts[0] * 3600 + elapsedParts[1] * 60 + elapsedParts[2];
+        }
+        
+        const totalSec = totalMin * 60;
+        const remainingSec = Math.max(0, totalSec - elapsedSec);
+        
+        const hours = Math.floor(remainingSec / 3600);
+        const minutes = Math.floor((remainingSec % 3600) / 60);
+        const seconds = remainingSec % 60;
+        
+        if (hours > 0) {
+          timeRemainingStr = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        } else {
+          timeRemainingStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+      }
+    }
+
+    chrome.runtime.sendMessage({
+      type: 'queue_hits_discovered',
+      hits: [{
+        groupId,
+        taskUrl: window.location.href,
+        requester,
+        reward,
+        timeRemaining: timeRemainingStr
+      }]
+    });
+  } catch (err) {
+    console.error('[MTurk Agent] Error in scrapeActiveHitDetails:', err);
+  }
+}
 
 // Scrapes the active queue list on worker.mturk.com/tasks
 function scrapeHitsQueue() {
@@ -184,6 +263,7 @@ function scrapeHitsQueue() {
 
         discoveredHits.push({
           groupId,
+          taskUrl: href.startsWith('http') ? href : 'https://worker.mturk.com' + href,
           requester,
           reward,
           timeRemaining
