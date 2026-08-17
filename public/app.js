@@ -53,34 +53,26 @@ function playVoiceAlert(text) {
   }
 }
 
-// Chime Audio alert (Web Audio API)
+// Chime Audio alert (using the original catcher sound files)
 function playChime() {
   if (!voiceAlertsActive) return;
   try {
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    const playTone = (freq, startTime, duration) => {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, startTime);
-      
-      gain.gain.setValueAtTime(0.08, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-      
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-    };
-    
-    const now = audioCtx.currentTime;
-    playTone(523.25, now, 0.4);       // C5
-    playTone(659.25, now + 0.1, 0.4); // E5
-    playTone(783.99, now + 0.2, 0.6); // G5
+    const audio = new Audio('/audio/legacy-include-list-1.ogg');
+    audio.volume = 0.5;
+    audio.play().catch(e => console.log('Chime playback blocked by browser autocomplete:', e));
   } catch (e) {
-    console.error(e);
+    console.error('Error playing custom chime:', e);
+  }
+}
+
+// CAPTCHA/Puzzle alarm warning alert
+function playAlarm() {
+  try {
+    const audio = new Audio('/audio/alarm.ogg');
+    audio.volume = 0.6;
+    audio.play().catch(e => console.log('Alarm playback blocked by browser autocomplete:', e));
+  } catch (e) {
+    console.error('Error playing puzzle warning alarm:', e);
   }
 }
 
@@ -252,7 +244,14 @@ function connectWebSocket() {
       
       else if (data.type === 'worker_status' || data.type === 'worker_update') {
         // Cache stats updates
-        currentRdpStats[data.worker.rdpName] = data.worker;
+        if (data.worker && data.worker.rdpName) {
+          currentRdpStats[data.worker.rdpName] = data.worker;
+        }
+        
+        // Trigger alarm alert if captcha/puzzle detected
+        if (data.worker && data.worker.status === 'hacked') {
+          playAlarm();
+        }
         
         // Auto-refresh Home or Dashboard views if they are open
         const hash = window.location.hash;
