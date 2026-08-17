@@ -130,13 +130,52 @@ let db = {
   ]
 };
 
+let mongoCollection = null;
+
+// Connect to MongoDB if MONGODB_URI is provided
+async function connectMongoDB() {
+  const uri = process.env.MONGODB_URI;
+  if (!uri) {
+    console.log('[DB] No MONGODB_URI environment variable detected. Running with local db.json.');
+    loadDB();
+    return;
+  }
+
+  try {
+    console.log('[MongoDB] Connecting to cluster...');
+    const { MongoClient } = require('mongodb');
+    const client = new MongoClient(uri);
+    await client.connect();
+    
+    const mongoDb = client.db('mayohn');
+    mongoCollection = mongoDb.collection('store');
+    console.log('[MongoDB] Connected successfully');
+
+    // Load database document
+    const doc = await mongoCollection.findOne({ _id: 'main_db' });
+    if (doc && doc.data) {
+      db = { ...db, ...doc.data };
+      console.log('[MongoDB] Loaded database state successfully from Atlas');
+    } else {
+      console.log('[MongoDB] No existing state found, saving initial default database');
+      await mongoCollection.updateOne(
+        { _id: 'main_db' },
+        { $set: { data: db } },
+        { upsert: true }
+      );
+    }
+  } catch (err) {
+    console.error('[MongoDB] Connection failed, falling back to local db.json:', err);
+    loadDB();
+  }
+}
+
 // Load database from file if exists
 function loadDB() {
   try {
     if (fs.existsSync(DB_FILE)) {
       const fileData = fs.readFileSync(DB_FILE, 'utf8');
       const parsed = JSON.parse(fileData);
-      // Merge with default DB structure to prevent crashes if structure was empty
       db = { ...db, ...parsed };
       console.log('[DB] Database loaded successfully from db.json');
     } else {
@@ -147,16 +186,26 @@ function loadDB() {
   }
 }
 
-// Save database to file
+// Save database to file & MongoDB
 function saveDB() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2), 'utf8');
+    
+    if (mongoCollection) {
+      mongoCollection.updateOne(
+        { _id: 'main_db' },
+        { $set: { data: db } },
+        { upsert: true }
+      ).catch(err => {
+        console.error('[MongoDB] Background sync failed:', err);
+      });
+    }
   } catch (err) {
-    console.error('[DB] Error saving database to file:', err);
+    console.error('[DB] Error saving database:', err);
   }
 }
 
-loadDB();
+connectMongoDB();
 
 // ==========================================================================
 // AUTHENTICATION MIDDLEWARE
