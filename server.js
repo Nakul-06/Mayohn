@@ -1007,18 +1007,7 @@ wss.on('connection', (ws, req) => {
             }
           });
 
-          // Sync cleanup: Mark any active hits not found in the scraped queue as Complete or delete them
-          if (data.hits.length > 0) {
-            const initialCount = db.hits.length;
-            db.hits = db.hits.filter(h => {
-              if (h.workerName !== acc.workerName) return true;
-              if (h.status === 'Complete') return true;
-              return activeScrapedUrls.has(h.taskUrl);
-            });
-            if (db.hits.length !== initialCount) {
-              changed = true;
-            }
-          }
+          // Once accepted, hits remain in the portal list until manually set as complete or deleted by the user.
           
           if (changed) {
             saveDB();

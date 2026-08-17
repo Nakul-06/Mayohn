@@ -242,7 +242,7 @@ function scrapeHitsQueue() {
     // Find all links containing /projects/ and /tasks
     const links = Array.from(document.querySelectorAll('a')).filter(a => {
       const href = a.getAttribute('href') || '';
-      return href.includes('/projects/') && href.includes('/tasks');
+      return href.includes('/projects/') && href.includes('/tasks') && !a.innerText.toLowerCase().includes('contact');
     });
 
     const discoveredHits = [];
@@ -258,7 +258,31 @@ function scrapeHitsQueue() {
         let row = link.parentElement;
         let depth = 0;
         while (row && depth < 10) {
-          if (row.innerText.includes('$') && (row.innerText.toLowerCase().includes('remaining') || row.innerText.toLowerCase().includes('min'))) {
+          // If we hit the table or body level, stop
+          if (row.tagName === 'BODY' || row.tagName === 'TABLE' || row.tagName === 'TBODY' || row.classList.contains('my-tasks-table')) {
+            break;
+          }
+
+          // If the container spans different project group IDs, we went too high!
+          const linksInRow = Array.from(row.querySelectorAll('a[href*="/projects/"]'));
+          const uniqueGroupIds = new Set(linksInRow.map(a => {
+            const h = a.getAttribute('href') || '';
+            const m = h.match(/\/projects\/([A-Z0-9]+)/i);
+            return m ? m[1] : null;
+          }).filter(Boolean));
+          
+          if (uniqueGroupIds.size > 1) {
+            break;
+          }
+
+          // Stop if it matches a typical row container or has time remaining details
+          const isRow = row.tagName === 'TR' || 
+                        row.classList.contains('row') || 
+                        row.classList.contains('table-row') ||
+                        row.classList.contains('task-queue-project-row') ||
+                        (row.innerText.includes('$') && (row.innerText.toLowerCase().includes('remaining') || row.innerText.toLowerCase().includes('min')));
+          
+          if (isRow) {
             break;
           }
           row = row.parentElement;
@@ -276,11 +300,12 @@ function scrapeHitsQueue() {
         let requester = 'Unknown Requester';
         const reqLink = Array.from(row.querySelectorAll('a')).find(a => {
           const h = a.getAttribute('href') || '';
-          return h.includes('requester_id') || h.includes('requesters');
+          return h.includes('requester_id') || h.includes('requesters') || h.includes('requester');
         });
         if (reqLink) {
           requester = reqLink.innerText.trim();
         } else {
+          // Fallback: use first non-empty line
           const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
           if (lines.length > 0) requester = lines[0];
         }
@@ -467,45 +492,47 @@ function updateTaskgroupConfig(config) {
     activeTaskgroup.url4
   ].filter(Boolean).map(url => getAcceptUrl(url)).filter(Boolean);
 
-  // 1. Loop 1: High frequency target catcher (runs every 2 seconds continuously)
+  // 1. Loop 1: High frequency target catcher (runs continuously, round-robin style)
   if (targets.length > 0) {
-    console.log(`[MTurk Agent] Starting continuous high-frequency target catcher for:`, targets);
+    let targetIndex = 0;
+    console.log(`[MTurk Agent] Starting continuous target catcher (Round-Robin) for:`, targets);
     targetIntervalId = setInterval(async () => {
       if (currentlyFetchingTargets) return;
       currentlyFetchingTargets = true;
 
-      for (const acceptUrl of targets) {
-        try {
-          console.log(`[MTurk Agent] Checking/Accepting target URL: ${acceptUrl}`);
-          const response = await fetch(acceptUrl);
-          const text = await response.text();
+      try {
+        const acceptUrl = targets[targetIndex];
+        targetIndex = (targetIndex + 1) % targets.length;
 
-          const isAccepted = text.includes('assigned_to_user') || 
-                             text.includes('Time Elapsed') || 
-                             text.includes('time_elapsed') ||
-                             text.includes('Submit') ||
-                             (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
+        console.log(`[MTurk Agent] Checking/Accepting target URL: ${acceptUrl}`);
+        const response = await fetch(acceptUrl);
+        const text = await response.text();
 
-          if (isAccepted) {
-            console.log(`[MTurk Agent] SUCCESS! Auto-accepted target HIT: ${acceptUrl}`);
-            
-            const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
-            const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
+        const isAccepted = text.includes('assigned_to_user') || 
+                           text.includes('Time Elapsed') || 
+                           text.includes('time_elapsed') ||
+                           text.includes('Submit') ||
+                           (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
 
-            chrome.runtime.sendMessage({
-              type: 'new_hit_notification',
-              message: `Successfully accepted target HIT Group: ${groupId}`
-            });
+        if (isAccepted) {
+          console.log(`[MTurk Agent] SUCCESS! Auto-accepted target HIT: ${acceptUrl}`);
+          
+          const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
+          const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
 
-            scrapeHitsQueue();
-          }
-        } catch (err) {
-          console.error('[MTurk Agent] Target auto-accept failed:', err);
+          chrome.runtime.sendMessage({
+            type: 'new_hit_notification',
+            message: `Successfully accepted target HIT Group: ${groupId}`
+          });
+
+          scrapeHitsQueue();
         }
+      } catch (err) {
+        console.error('[MTurk Agent] Target auto-accept failed:', err);
       }
 
       currentlyFetchingTargets = false;
-    }, 2000);
+    }, 1500); // 1.5 seconds per single request is perfectly safe and avoids rate limit 429
   }
 
   // 2. Loop 2: General minReward search catcher (runs at configured search interval)
