@@ -329,8 +329,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // TAB-LEVEL AUTO-ACCEPTOR LOOP (RUNS IN LOGGED-IN SESSION CONTEXT)
 // ==========================================================================
 let activeTaskgroup = null;
-let acceptIntervalId = null;
-let currentlyFetching = false;
+let targetIntervalId = null;
+let searchIntervalId = null;
+let currentlyFetchingTargets = false;
+let currentlySearchingGeneral = false;
 
 function getAcceptUrl(inputUrlOrGroupId) {
   if (!inputUrlOrGroupId) return null;
@@ -350,12 +352,107 @@ function getAcceptUrl(inputUrlOrGroupId) {
   return null;
 }
 
+// Scans available HITs matching minReward and attempts to auto-accept them if not banned
+async function runGeneralCatcherSearch() {
+  if (!activeTaskgroup || !activeTaskgroup.status || currentlySearchingGeneral) return;
+  currentlySearchingGeneral = true;
+
+  try {
+    const minReward = parseFloat(activeTaskgroup.minReward) || 0.01;
+    const searchUrl = `https://worker.mturk.com/projects?format=json&sort=updated_desc&filters[min_reward]=${minReward}`;
+    
+    console.log(`[MTurk Agent] Scanning available HITs for minReward >= $${minReward}...`);
+    const response = await fetch(searchUrl);
+    const data = await response.json();
+    
+    if (!data || !data.results || data.results.length === 0) {
+      currentlySearchingGeneral = false;
+      return;
+    }
+    
+    // Parse banned list
+    let bannedList = [];
+    if (activeTaskgroup.bannedRequesters) {
+      bannedList = activeTaskgroup.bannedRequesters
+        .toLowerCase()
+        .split(',')
+        .map(r => r.trim())
+        .filter(Boolean);
+    }
+    
+    for (const hit of data.results) {
+      const groupId = hit.hit_set_id;
+      const requester = hit.requester_name || '';
+      const rewardVal = hit.monetary_reward ? hit.monetary_reward.amount_in_dollars : 0;
+      
+      // 1. Skip if requester is banned
+      const reqLower = requester.toLowerCase();
+      const isBanned = bannedList.some(banned => 
+        reqLower === banned || reqLower.includes(banned) || banned.includes(reqLower)
+      );
+      if (isBanned) {
+        console.log(`[MTurk Agent] Skipping general HIT (banned requester: "${requester}")`);
+        continue;
+      }
+      
+      // 2. Skip if it is already in our 4 targets
+      const targetGroupIds = [
+        activeTaskgroup.url1,
+        activeTaskgroup.url2,
+        activeTaskgroup.url3,
+        activeTaskgroup.url4
+      ].filter(Boolean).map(url => {
+        const m = url.match(/projects\/([A-Z0-9]+)/i);
+        return m ? m[1] : url.trim();
+      });
+      
+      if (targetGroupIds.includes(groupId)) {
+        continue;
+      }
+      
+      // 3. Auto-accept the general HIT
+      const acceptUrl = `https://worker.mturk.com/projects/${groupId}/tasks/accept_random`;
+      console.log(`[MTurk Agent] Auto-accepting general HIT matching minReward: ${requester} ($${rewardVal})`);
+      
+      const acceptRes = await fetch(acceptUrl);
+      const text = await acceptRes.text();
+      
+      const isAccepted = text.includes('assigned_to_user') || 
+                         text.includes('Time Elapsed') || 
+                         text.includes('time_elapsed') ||
+                         text.includes('Submit') ||
+                         (acceptRes.url.includes('/tasks/') && !acceptRes.url.includes('accept_random'));
+                         
+      if (isAccepted) {
+        console.log(`[MTurk Agent] SUCCESS! Auto-accepted general HIT: ${groupId}`);
+        
+        chrome.runtime.sendMessage({
+          type: 'new_hit_notification',
+          message: `Successfully accepted general HIT: ${requester} ($${rewardVal.toFixed(2)})`
+        });
+        
+        scrapeHitsQueue();
+        break; // Accept one general HIT per scan loop
+      }
+    }
+  } catch (err) {
+    console.error('[MTurk Agent] General catcher search failed:', err);
+  }
+  
+  currentlySearchingGeneral = false;
+}
+
 function updateTaskgroupConfig(config) {
   activeTaskgroup = config;
   
-  if (acceptIntervalId) {
-    clearInterval(acceptIntervalId);
-    acceptIntervalId = null;
+  // Clear any existing intervals
+  if (targetIntervalId) {
+    clearInterval(targetIntervalId);
+    targetIntervalId = null;
+  }
+  if (searchIntervalId) {
+    clearInterval(searchIntervalId);
+    searchIntervalId = null;
   }
 
   if (!activeTaskgroup || !activeTaskgroup.status) {
@@ -370,51 +467,57 @@ function updateTaskgroupConfig(config) {
     activeTaskgroup.url4
   ].filter(Boolean).map(url => getAcceptUrl(url)).filter(Boolean);
 
-  if (targets.length === 0) {
-    console.log('[MTurk Agent] No target URLs configured for auto-accept.');
-    return;
+  // 1. Loop 1: High frequency target catcher (runs every 2 seconds continuously)
+  if (targets.length > 0) {
+    console.log(`[MTurk Agent] Starting continuous high-frequency target catcher for:`, targets);
+    targetIntervalId = setInterval(async () => {
+      if (currentlyFetchingTargets) return;
+      currentlyFetchingTargets = true;
+
+      for (const acceptUrl of targets) {
+        try {
+          console.log(`[MTurk Agent] Checking/Accepting target URL: ${acceptUrl}`);
+          const response = await fetch(acceptUrl);
+          const text = await response.text();
+
+          const isAccepted = text.includes('assigned_to_user') || 
+                             text.includes('Time Elapsed') || 
+                             text.includes('time_elapsed') ||
+                             text.includes('Submit') ||
+                             (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
+
+          if (isAccepted) {
+            console.log(`[MTurk Agent] SUCCESS! Auto-accepted target HIT: ${acceptUrl}`);
+            
+            const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
+            const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
+
+            chrome.runtime.sendMessage({
+              type: 'new_hit_notification',
+              message: `Successfully accepted target HIT Group: ${groupId}`
+            });
+
+            scrapeHitsQueue();
+          }
+        } catch (err) {
+          console.error('[MTurk Agent] Target auto-accept failed:', err);
+        }
+      }
+
+      currentlyFetchingTargets = false;
+    }, 2000);
   }
 
-  const intervalMs = parseInt(activeTaskgroup.interval, 10) || 1000;
-  console.log(`[MTurk Agent] Starting auto-accept loop for:`, targets, `at ${intervalMs}ms`);
-
-  acceptIntervalId = setInterval(async () => {
-    if (currentlyFetching) return;
-    currentlyFetching = true;
-
-    for (const acceptUrl of targets) {
-      try {
-        console.log(`[MTurk Agent] Checking/Accepting: ${acceptUrl}`);
-        const response = await fetch(acceptUrl);
-        const text = await response.text();
-
-        const isAccepted = text.includes('assigned_to_user') || 
-                           text.includes('Time Elapsed') || 
-                           text.includes('time_elapsed') ||
-                           text.includes('Submit') ||
-                           (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
-
-        if (isAccepted) {
-          console.log(`[MTurk Agent] SUCCESS! Auto-accepted HIT: ${acceptUrl}`);
-          
-          const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
-          const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
-
-          // Tell background script to trigger a notification to the Sphinx Portal
-          chrome.runtime.sendMessage({
-            type: 'new_hit_notification',
-            message: `Successfully accepted target HIT Group: ${groupId}`
-          });
-
-          // Instantly scrape queue to sync active countdown timer to dashboard
-          scrapeHitsQueue();
-        }
-      } catch (err) {
-        console.error('[MTurk Agent] Auto-accept fetch failed:', err);
-      }
-    }
-
-    currentlyFetching = false;
+  // 2. Loop 2: General minReward search catcher (runs at configured search interval)
+  const intervalSeconds = parseInt(activeTaskgroup.interval, 10) || 60;
+  const intervalMs = intervalSeconds * 1000;
+  console.log(`[MTurk Agent] Starting general minReward ($${activeTaskgroup.minReward}) catcher scan every ${intervalSeconds} seconds.`);
+  
+  // Run once immediately on config update
+  runGeneralCatcherSearch();
+  
+  searchIntervalId = setInterval(() => {
+    runGeneralCatcherSearch();
   }, intervalMs);
 }
 
