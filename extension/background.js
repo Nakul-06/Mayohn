@@ -43,6 +43,15 @@ function connectToServer() {
 
     ws.onmessage = (event) => {
       console.log('Received message from server:', event.data);
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'taskgroup_update') {
+          activeTaskgroupConfig = data.taskgroup;
+          startAutoAcceptLoop();
+        }
+      } catch (err) {
+        console.error('Error handling server message:', err);
+      }
     };
 
     ws.onclose = () => {
@@ -232,3 +241,112 @@ loadSettings(() => {
   connectToServer();
   performBackgroundScrape();
 });
+
+// ==========================================================================
+// CATCHER AUTO-ACCEPT CRAWLER LOOP
+// ==========================================================================
+let activeTaskgroupConfig = null;
+let autoAcceptIntervalId = null;
+let currentlyAccepting = false;
+
+function getAcceptUrl(inputUrlOrGroupId) {
+  if (!inputUrlOrGroupId) return null;
+  const trimmed = inputUrlOrGroupId.trim();
+  if (trimmed.includes('accept_random')) {
+    return trimmed;
+  }
+  if (trimmed.includes('projects/')) {
+    const match = trimmed.match(/projects\/([A-Z0-9]+)/i);
+    if (match) {
+      return `https://worker.mturk.com/projects/${match[1]}/tasks/accept_random`;
+    }
+  }
+  if (/^[A-Z0-9]+$/i.test(trimmed)) {
+    return `https://worker.mturk.com/projects/${trimmed}/tasks/accept_random`;
+  }
+  return null;
+}
+
+function triggerQueueScrapeInOpenTabs() {
+  chrome.tabs.query({ url: '*://worker.mturk.com/*' }, (tabs) => {
+    tabs.forEach(tab => {
+      try {
+        chrome.tabs.sendMessage(tab.id, { type: 'trigger_queue_scrape' });
+      } catch (e) {
+        // Safe check if content script is loaded
+      }
+    });
+  });
+}
+
+function startAutoAcceptLoop() {
+  if (autoAcceptIntervalId) {
+    clearInterval(autoAcceptIntervalId);
+    autoAcceptIntervalId = null;
+  }
+
+  if (!activeTaskgroupConfig || !activeTaskgroupConfig.status) {
+    console.log('[Auto-Acceptor] Catcher status is disabled.');
+    return;
+  }
+
+  const targets = [
+    activeTaskgroupConfig.url1,
+    activeTaskgroupConfig.url2,
+    activeTaskgroupConfig.url3,
+    activeTaskgroupConfig.url4
+  ].filter(Boolean).map(url => getAcceptUrl(url)).filter(Boolean);
+
+  if (targets.length === 0) {
+    console.log('[Auto-Acceptor] No valid target URLs to accept.');
+    return;
+  }
+
+  const intervalMs = parseInt(activeTaskgroupConfig.interval, 10) || 1000;
+  console.log(`[Auto-Acceptor] Starting loop for targets:`, targets, `at interval: ${intervalMs}ms`);
+
+  autoAcceptIntervalId = setInterval(async () => {
+    if (currentlyAccepting) return;
+    currentlyAccepting = true;
+
+    for (const acceptUrl of targets) {
+      try {
+        console.log(`[Auto-Acceptor] Checking/Accepting target: ${acceptUrl}`);
+        const response = await fetch(acceptUrl, { credentials: 'include' });
+        const text = await response.text();
+
+        const isAccepted = text.includes('assigned_to_user') || 
+                           text.includes('Time Elapsed') || 
+                           text.includes('time_elapsed') ||
+                           text.includes('Submit') ||
+                           (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
+
+        if (isAccepted) {
+          console.log(`[Auto-Acceptor] SUCCESS! Caught HIT for accept URL: ${acceptUrl}`);
+          
+          const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
+          const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
+
+          // Instantly send hit caught message to backend
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+              type: 'notification',
+              notification: {
+                message: groupId,
+                payout: '$0.00',
+                requester: 'Targeted Catcher'
+              }
+            }));
+          }
+
+          // Force an immediate queue scrape to update all stats and remaining time
+          triggerQueueScrapeInOpenTabs();
+        }
+      } catch (err) {
+        console.error(`[Auto-Acceptor] Fetch failed for ${acceptUrl}:`, err);
+      }
+    }
+
+    currentlyAccepting = false;
+  }, intervalMs);
+}

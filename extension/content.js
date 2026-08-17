@@ -203,3 +203,10 @@ function scrapeHitsQueue() {
     console.error('[MTurk Agent] Error in scrapeHitsQueue:', err);
   }
 }
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.type === 'trigger_queue_scrape') {
+    console.log('[MTurk Agent] Triggered immediate queue scrape...');
+    scrapeHitsQueue();
+  }
+});

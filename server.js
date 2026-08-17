@@ -411,6 +411,23 @@ app.post('/api/taskgroup', authenticateToken, (req, res) => {
     ...req.body
   };
   saveDB();
+  
+  // Broadcast update to all connected extensions
+  const updatePayload = JSON.stringify({
+    type: 'taskgroup_update',
+    taskgroup: db.taskgroup
+  });
+  
+  wss.clients.forEach(client => {
+    if (client.isExtension && client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(updatePayload);
+      } catch (err) {
+        console.error('Failed to broadcast taskgroup update to client:', err);
+      }
+    }
+  });
+
   res.json(db.taskgroup);
 });
 
@@ -692,11 +709,13 @@ wss.on('connection', (ws, req) => {
   const type = urlParams.get('type');
   
   if (type === 'dashboard') {
+    ws.isDashboard = true;
     dashboards.add(ws);
     ws.on('close', () => dashboards.delete(ws));
   } 
   
   else if (type === 'extension') {
+    ws.isExtension = true;
     const rdpName = urlParams.get('rdp') || 'Unknown-RDP';
     const workerId = urlParams.get('workerId') || 'Unknown-ID';
     
@@ -732,6 +751,16 @@ wss.on('connection', (ws, req) => {
     }
     
     saveDB();
+    
+    // Send initial taskgroup settings to the extension
+    try {
+      ws.send(JSON.stringify({
+        type: 'taskgroup_update',
+        taskgroup: db.taskgroup
+      }));
+    } catch (err) {
+      console.error('Failed to send initial taskgroup settings to extension:', err);
+    }
     
     // Broadcast status to active dashboards
     broadcastToDashboards({
