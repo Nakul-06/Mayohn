@@ -442,7 +442,7 @@ app.get('/api/hits', authenticateToken, (req, res) => {
     (h.requester || '').toLowerCase().includes(search)
   );
   
-  res.json({ items: filtered });
+  res.json({ items: filtered, serverTime: Date.now() });
 });
 
 app.post('/api/hits', authenticateToken, (req, res) => {
@@ -855,6 +855,7 @@ wss.on('connection', (ws, req) => {
         else if (data.type === 'queue_hits') {
           const acc = db.accounts.find(a => a.workerId === workerId) || { workerName: rdpName };
           let changed = false;
+          const activeScrapedUrls = new Set();
           
           data.hits.forEach(qHit => {
             if (!shouldRegisterHit(qHit.groupId, qHit.requester)) {
@@ -872,6 +873,7 @@ wss.on('connection', (ws, req) => {
             // Use the configured Group ID from the task types list
             const finalTask = matchedType ? (matchedType.taskUrl || qHit.groupId) : qHit.groupId;
             const targetTaskUrl = qHit.taskUrl || `https://worker.mturk.com/projects/${finalTask}/tasks/accept_random`;
+            activeScrapedUrls.add(targetTaskUrl);
 
             // 1. Find if this exact assignment already exists by its unique taskUrl
             let existingHit = db.hits.find(h => h.taskUrl === targetTaskUrl && h.workerName === acc.workerName);
@@ -924,11 +926,33 @@ wss.on('connection', (ws, req) => {
                 existingHit.taskUrl = targetTaskUrl;
                 hitChanged = true;
               }
+              const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
+              if (existingHit.reward !== payoutVal) {
+                existingHit.reward = payoutVal;
+                hitChanged = true;
+              }
+              if (existingHit.requester !== qHit.requester) {
+                existingHit.requester = qHit.requester;
+                hitChanged = true;
+              }
               if (hitChanged) {
                 changed = true;
               }
             }
           });
+
+          // Sync cleanup: Mark any active hits not found in the scraped queue as Complete or delete them
+          if (data.hits.length > 0) {
+            const initialCount = db.hits.length;
+            db.hits = db.hits.filter(h => {
+              if (h.workerName !== acc.workerName) return true;
+              if (h.status === 'Complete') return true;
+              return activeScrapedUrls.has(h.taskUrl);
+            });
+            if (db.hits.length !== initialCount) {
+              changed = true;
+            }
+          }
           
           if (changed) {
             saveDB();

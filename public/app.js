@@ -129,7 +129,9 @@ if (!window.countdownIntervalId) {
       const initialSeconds = parseTimeToSeconds(initialRemaining);
       if (initialSeconds <= 0) return;
       
-      const elapsedSeconds = Math.floor((Date.now() - timestamp) / 1000);
+      const offset = window.clientServerTimeOffset || 0;
+      const currentServerTime = Date.now() - offset;
+      const elapsedSeconds = Math.floor((currentServerTime - timestamp) / 1000);
       const remainingSeconds = Math.max(0, initialSeconds - elapsedSeconds);
       
       if (remainingSeconds === 0) {
@@ -852,6 +854,9 @@ async function viewHitsList() {
   
   try {
     const res = await fetchAPI(`/hits?search=${encodeURIComponent(query)}`);
+    if (res && res.serverTime) {
+      window.clientServerTimeOffset = Date.now() - res.serverTime;
+    }
     
     // Update alert stat counter in Home page cache
     alertsCount = res.items ? res.items.length : 0;
