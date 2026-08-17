@@ -32,10 +32,8 @@ app.use((req, res, next) => {
 });
 
 // Helper to filter caught hits based on active TaskGroup configurations
-function shouldRegisterHit(groupId, requester, reward) {
-  if (!db.taskgroup || !db.taskgroup.status) {
-    return true;
-  }
+function shouldRegisterHit(groupId, requester) {
+  if (!db.taskgroup) return false;
   
   const targetUrls = [
     db.taskgroup.url1,
@@ -44,25 +42,26 @@ function shouldRegisterHit(groupId, requester, reward) {
     db.taskgroup.url4
   ].filter(Boolean).map(u => u.trim());
   
+  if (targetUrls.length === 0) return false;
+  
   const isTargetUrl = targetUrls.some(url => {
     return url === groupId || url.includes(groupId) || groupId.includes(url);
   });
   
-  if (isTargetUrl) {
-    return true;
-  }
+  if (isTargetUrl) return true;
   
-  const rewardVal = parseFloat(reward) || 0;
-  const minReward = parseFloat(db.taskgroup.minReward || 0);
-  const isRewardValid = rewardVal >= minReward;
+  const targetNames = [
+    db.taskgroup.url1Name,
+    db.taskgroup.url2Name,
+    db.taskgroup.url3Name,
+    db.taskgroup.url4Name
+  ].filter(Boolean).map(n => n.trim().toLowerCase());
   
-  let isNotBanned = true;
-  if (db.taskgroup.bannedRequesters) {
-    const banned = db.taskgroup.bannedRequesters.toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
-    isNotBanned = !banned.includes(requester.toLowerCase());
-  }
+  const isTargetName = targetNames.some(name => {
+    return name === requester.toLowerCase() || requester.toLowerCase().includes(name);
+  });
   
-  return isRewardValid && isNotBanned;
+  return isTargetUrl || isTargetName;
 }
 
 // ==========================================================================
@@ -94,7 +93,7 @@ let db = {
       status: "Active"
     }
   ],
-  tasktypes: ["Survey", "Research", "Transcription", "Data Labeling"],
+  tasktypes: [],
   taskgroup: {
     status: false,
     url1: "",
@@ -797,39 +796,55 @@ wss.on('connection', (ws, req) => {
           
           // Parse payout value
           const payoutVal = parseFloat((data.notification.payout || '$0.00').replace(/[^0-9.]/g, '')) || 0.00;
+          const groupId = data.notification.message;
+          const requester = data.notification.requester || 'Targeted Catcher';
 
-          if (!shouldRegisterHit(data.notification.message, data.notification.requester || 'Targeted Requester', payoutVal)) {
-            console.log(`[WebSocket] Skipping caught HIT (does not match TaskGroup criteria): ${data.notification.message}`);
+          if (!shouldRegisterHit(groupId, requester)) {
+            console.log(`[WebSocket] Skipping caught HIT (does not match TaskGroup criteria): ${groupId}`);
             return;
           }
 
-          // Save caught HIT directly into the db.json
-          const newHit = {
-            id: `hit_${Date.now()}`,
-            _id: `hit_${Date.now()}`,
-            workerName: acc.workerName,
-            task: data.notification.message || 'Survey Link',
-            requester: data.notification.requester || 'Targeted Requester',
-            reward: payoutVal,
-            status: 'Active',
-            timeRemaining: '60 Min',
-            timestamp: Date.now()
-          };
-          
-          db.hits.push(newHit);
-          saveDB();
+          // Find matching TaskType to get the configured URL/Group ID
+          const matchedType = (db.tasktypes || []).find(t => 
+            t.title && (
+              t.title.toLowerCase() === requester.toLowerCase() ||
+              (t.taskUrl && (t.taskUrl === groupId || t.taskUrl.includes(groupId) || groupId.includes(t.taskUrl)))
+            )
+          );
 
-          // Broadcast live alert to admin dashboards
-          broadcastToDashboards({
-            type: 'hit_alert',
-            rdpName: acc.workerName,
-            workerId: workerId,
-            notification: {
-              time: new Date().toLocaleTimeString(),
-              message: newHit.task,
-              payout: `$${payoutVal.toFixed(2)}`
-            }
-          });
+          // Use the configured Group ID from the task types list
+          const finalTask = matchedType ? (matchedType.taskUrl || groupId) : groupId;
+
+          // Check if this task already exists in the database for this worker
+          const exists = db.hits.some(h => h.task === finalTask && h.workerName === acc.workerName);
+          if (!exists) {
+            const newHit = {
+              id: `hit_${Date.now()}`,
+              _id: `hit_${Date.now()}`,
+              workerName: acc.workerName,
+              task: finalTask,
+              requester: requester,
+              reward: payoutVal,
+              status: 'Active',
+              timeRemaining: 'Calculating...',
+              timestamp: Date.now()
+            };
+            
+            db.hits.push(newHit);
+            saveDB();
+
+            // Broadcast live alert to admin dashboards
+            broadcastToDashboards({
+              type: 'hit_alert',
+              rdpName: acc.workerName,
+              workerId: workerId,
+              notification: {
+                time: new Date().toLocaleTimeString(),
+                message: finalTask,
+                payout: `$${payoutVal.toFixed(2)}`
+              }
+            });
+          }
         }
         
         else if (data.type === 'queue_hits') {
@@ -837,18 +852,30 @@ wss.on('connection', (ws, req) => {
           let changed = false;
           
           data.hits.forEach(qHit => {
-            const exists = db.hits.some(h => h.task === qHit.groupId && h.workerName === acc.workerName);
+            if (!shouldRegisterHit(qHit.groupId, qHit.requester)) {
+              return;
+            }
+
+            // Find matching TaskType to get the configured URL/Group ID
+            const matchedType = (db.tasktypes || []).find(t => 
+              t.title && (
+                t.title.toLowerCase() === qHit.requester.toLowerCase() ||
+                (t.taskUrl && (t.taskUrl === qHit.groupId || t.taskUrl.includes(qHit.groupId) || qHit.groupId.includes(t.taskUrl)))
+              )
+            );
+
+            // Use the configured Group ID from the task types list
+            const finalTask = matchedType ? (matchedType.taskUrl || qHit.groupId) : qHit.groupId;
+
+            // Check if this task already exists in the database for this worker
+            const exists = db.hits.some(h => h.task === finalTask && h.workerName === acc.workerName);
             if (!exists) {
               const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
-              
-              if (!shouldRegisterHit(qHit.groupId, qHit.requester, payoutVal)) {
-                return;
-              }
               const newHit = {
                 id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 _id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 workerName: acc.workerName,
-                task: qHit.groupId,
+                task: finalTask,
                 requester: qHit.requester,
                 reward: payoutVal,
                 status: 'Active',
@@ -864,15 +891,23 @@ wss.on('connection', (ws, req) => {
                 workerId: workerId,
                 notification: {
                   time: new Date().toLocaleTimeString(),
-                  message: newHit.task,
+                  message: finalTask,
                   payout: `$${payoutVal.toFixed(2)}`
                 }
               });
+            } else {
+              // Update remaining time dynamically for the existing HIT
+              const existingHit = db.hits.find(h => h.task === finalTask && h.workerName === acc.workerName);
+              if (existingHit && existingHit.timeRemaining !== qHit.timeRemaining) {
+                existingHit.timeRemaining = qHit.timeRemaining;
+                changed = true;
+              }
             }
           });
           
           if (changed) {
             saveDB();
+            broadcastToDashboards({ type: 'hits_update' });
           }
         }
       } catch (err) {

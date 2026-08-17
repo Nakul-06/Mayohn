@@ -826,7 +826,7 @@ async function viewHitsList() {
           <td>${timeStr}</td>
           <td>
             <div style="display:flex; gap:12px; align-items:center;">
-              <a href="${h.task.startsWith('http') ? h.task : 'https://worker.mturk.com/projects'}" target="_blank" style="color:#7465f4; text-decoration:underline; font-weight:500;">Click Here</a>
+              <a href="${h.task.startsWith('http') ? h.task : `https://worker.mturk.com/projects/${h.task}/tasks/accept_random`}" target="_blank" style="color:#7465f4; text-decoration:underline; font-weight:500;">Click Here</a>
               ${completeLink}
               <a href="javascript:void(0)" onclick="deleteHit('${h._id || h.id}')" style="color:#ef4444; text-decoration:underline; font-weight:500; font-size:12px; margin-left:8px;">Delete</a>
             </div>

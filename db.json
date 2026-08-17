@@ -35,12 +35,7 @@
       "status": "Active"
     }
   ],
-  "tasktypes": [
-    "Survey",
-    "Research",
-    "Transcription",
-    "Data Labeling"
-  ],
+  "tasktypes": [],
   "taskgroup": {
     "status": false,
     "url1": "",
@@ -55,41 +50,7 @@
     "interval": 60,
     "bannedRequesters": ""
   },
-  "hits": [
-    {
-      "id": "hit_1",
-      "_id": "hit_1",
-      "workerName": "RDP-Worker-01",
-      "task": "https://worker.mturk.com/projects/3XYZ/tasks",
-      "requester": "Academic Studies Group",
-      "reward": 1.5,
-      "status": "Active",
-      "timeRemaining": "45 Min",
-      "timestamp": 1786022921977
-    },
-    {
-      "id": "hit_1786022963372",
-      "_id": "hit_1786022963372",
-      "workerName": "RDP-Worker-01",
-      "task": "Survey about consumer behavior and social media habits",
-      "requester": "Behavioral Sciences Lab",
-      "reward": 2.5,
-      "status": "Active",
-      "timeRemaining": "60 Min",
-      "timestamp": 1786022963372
-    },
-    {
-      "id": "hit_1786022965374",
-      "_id": "hit_1786022965375",
-      "workerName": "RDP-Worker-01",
-      "task": "Decision making game on financial choices",
-      "requester": "Decision Group",
-      "reward": 5,
-      "status": "Active",
-      "timeRemaining": "60 Min",
-      "timestamp": 1786022965375
-    }
-  ],
+  "hits": [],
   "accountsStatus": [
     {
       "workerId": "A3ABC123XYZ456",
