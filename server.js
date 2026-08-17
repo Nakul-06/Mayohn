@@ -815,14 +815,19 @@ wss.on('connection', (ws, req) => {
           // Use the configured Group ID from the task types list
           const finalTask = matchedType ? (matchedType.taskUrl || groupId) : groupId;
 
-          // Check if this task already exists in the database for this worker
-          const exists = db.hits.some(h => h.task === finalTask && h.workerName === acc.workerName);
-          if (!exists) {
+          // Check if a placeholder hit already exists (to avoid duplicate notification triggers)
+          const placeholderExists = db.hits.some(h => 
+            h.task === finalTask && 
+            h.workerName === acc.workerName && 
+            (h.taskUrl === 'Calculating...' || !h.taskUrl)
+          );
+          if (!placeholderExists) {
             const newHit = {
               id: `hit_${Date.now()}`,
               _id: `hit_${Date.now()}`,
               workerName: acc.workerName,
               task: finalTask,
+              taskUrl: 'Calculating...',
               requester: requester,
               reward: payoutVal,
               status: 'Active',
@@ -866,16 +871,28 @@ wss.on('connection', (ws, req) => {
 
             // Use the configured Group ID from the task types list
             const finalTask = matchedType ? (matchedType.taskUrl || qHit.groupId) : qHit.groupId;
+            const targetTaskUrl = qHit.taskUrl || `https://worker.mturk.com/projects/${finalTask}/tasks/accept_random`;
 
-            // Check if this task already exists in the database for this worker
-            const exists = db.hits.some(h => h.task === finalTask && h.workerName === acc.workerName);
-            if (!exists) {
+            // 1. Find if this exact assignment already exists by its unique taskUrl
+            let existingHit = db.hits.find(h => h.taskUrl === targetTaskUrl && h.workerName === acc.workerName);
+            
+            // 2. If not, check if there is an unassociated notification placeholder hit for this task
+            if (!existingHit) {
+              existingHit = db.hits.find(h => 
+                h.task === finalTask && 
+                h.workerName === acc.workerName && 
+                (!h.taskUrl || h.taskUrl === 'Calculating...' || h.taskUrl.includes('accept_random'))
+              );
+            }
+
+            if (!existingHit) {
               const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
               const newHit = {
                 id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 _id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 workerName: acc.workerName,
                 task: finalTask,
+                taskUrl: targetTaskUrl,
                 requester: qHit.requester,
                 reward: payoutVal,
                 status: 'Active',
@@ -896,10 +913,18 @@ wss.on('connection', (ws, req) => {
                 }
               });
             } else {
-              // Update remaining time dynamically for the existing HIT
-              const existingHit = db.hits.find(h => h.task === finalTask && h.workerName === acc.workerName);
-              if (existingHit && existingHit.timeRemaining !== qHit.timeRemaining) {
+              // Update details of the existing hit dynamically
+              let hitChanged = false;
+              if (existingHit.timeRemaining !== qHit.timeRemaining) {
                 existingHit.timeRemaining = qHit.timeRemaining;
+                existingHit.timestamp = Date.now(); // Reset timestamp for live countdown sync
+                hitChanged = true;
+              }
+              if (existingHit.taskUrl !== targetTaskUrl) {
+                existingHit.taskUrl = targetTaskUrl;
+                hitChanged = true;
+              }
+              if (hitChanged) {
                 changed = true;
               }
             }

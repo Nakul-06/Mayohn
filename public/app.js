@@ -79,6 +79,68 @@ function playAlarm() {
 // Trigger initial voice load
 window.speechSynthesis?.getVoices();
 
+function parseTimeToSeconds(timeStr) {
+  if (!timeStr) return 0;
+  const clean = timeStr.replace(/remaining/i, '').trim();
+  
+  // Try hh:mm:ss or mm:ss
+  const parts = clean.split(':').map(Number);
+  if (parts.length === 3 && !parts.some(isNaN)) {
+    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  }
+  if (parts.length === 2 && !parts.some(isNaN)) {
+    return parts[0] * 60 + parts[1];
+  }
+  
+  // Match minutes or hours
+  const minMatch = clean.match(/(\d+)\s*m(in)?s?/i);
+  if (minMatch) return parseInt(minMatch[1], 10) * 60;
+  
+  const hrMatch = clean.match(/(\d+)\s*h(our)?s?/i);
+  if (hrMatch) return parseInt(hrMatch[1], 10) * 3600;
+  
+  const secMatch = clean.match(/(\d+)\s*s(ec)?s?/i);
+  if (secMatch) return parseInt(secMatch[1], 10);
+  
+  return 0;
+}
+
+function formatSecondsToTime(totalSec) {
+  const hours = Math.floor(totalSec / 3600);
+  const minutes = Math.floor((totalSec % 3600) / 60);
+  const seconds = totalSec % 60;
+  
+  if (hours > 0) {
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+  }
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+}
+
+// Global real-time countdown interval (runs every second)
+if (!window.countdownIntervalId) {
+  window.countdownIntervalId = setInterval(() => {
+    const timerCells = document.querySelectorAll('.hit-timer');
+    timerCells.forEach(cell => {
+      const timestamp = parseInt(cell.getAttribute('data-timestamp'), 10);
+      const initialRemaining = cell.getAttribute('data-initial-remaining');
+      const isComplete = cell.getAttribute('data-complete') === 'true';
+      if (!timestamp || !initialRemaining || isComplete) return;
+      
+      const initialSeconds = parseTimeToSeconds(initialRemaining);
+      if (initialSeconds <= 0) return;
+      
+      const elapsedSeconds = Math.floor((Date.now() - timestamp) / 1000);
+      const remainingSeconds = Math.max(0, initialSeconds - elapsedSeconds);
+      
+      if (remainingSeconds === 0) {
+        cell.innerHTML = '<span style="color:#ef4444; font-weight:600;">Expired</span>';
+      } else {
+        cell.textContent = `${formatSecondsToTime(remainingSeconds)} remaining`;
+      }
+    });
+  }, 1000);
+}
+
 // ==========================================================================
 // REST API CLIENT UTILITY (V MODULE REPLICATION)
 // ==========================================================================
@@ -822,10 +884,10 @@ async function viewHitsList() {
           <td style="font-family:monospace; font-size:13px; color:#3c4043;">${h.task}</td>
           <td>${h.requester}</td>
           <td>${parseFloat(h.reward || 0).toFixed(2)}</td>
-          <td>${timeStr}</td>
+          <td class="hit-timer" data-timestamp="${h.timestamp || Date.now()}" data-initial-remaining="${h.timeRemaining || '60 Min'}" data-complete="${isComplete}">${timeStr}</td>
           <td>
             <div style="display:flex; gap:12px; align-items:center;">
-              <a href="${h.task.startsWith('http') ? h.task : `https://worker.mturk.com/projects/${h.task}/tasks/accept_random`}" target="_blank" style="color:#7465f4; text-decoration:underline; font-weight:500;">Click Here</a>
+              <a href="${h.taskUrl && h.taskUrl !== 'Calculating...' ? h.taskUrl : (h.task.startsWith('http') ? h.task : `https://worker.mturk.com/projects/${h.task}/tasks/accept_random`)}" target="_blank" style="color:#7465f4; text-decoration:underline; font-weight:500;">Click Here</a>
               ${completeLink}
               <a href="javascript:void(0)" onclick="deleteHit('${h._id || h.id}')" style="color:#ef4444; text-decoration:underline; font-weight:500; font-size:12px; margin-left:8px;">Delete</a>
             </div>
