@@ -852,6 +852,12 @@ async function viewHitsList() {
   const query = document.getElementById('search-hits').value;
   const tbody = document.getElementById('table-body-hits');
   
+  // Hide bulk actions toolbar on view load
+  const toolbar = document.getElementById('bulk-actions-toolbar');
+  if (toolbar) toolbar.style.display = 'none';
+  const selectAllCheckbox = document.getElementById('select-all-hits');
+  if (selectAllCheckbox) selectAllCheckbox.checked = false;
+
   try {
     const res = await fetchAPI(`/hits?search=${encodeURIComponent(query)}`);
     if (res && res.serverTime) {
@@ -866,7 +872,7 @@ async function viewHitsList() {
     if (!res.items || res.items.length === 0) {
       tbody.innerHTML = `
         <tr class="empty-row">
-          <td colspan="7">No caught HITs matching the criteria.</td>
+          <td colspan="8">No caught HITs matching the criteria.</td>
         </tr>
       `;
       return;
@@ -884,6 +890,9 @@ async function viewHitsList() {
 
       return `
         <tr>
+          <td style="text-align: center;">
+            <input type="checkbox" class="select-hit-checkbox" data-id="${h._id || h.id}" style="cursor: pointer; width: 16px; height: 16px; accent-color: #7465f4;">
+          </td>
           <td>${index + 1}</td>
           <td style="color:#5f6368; font-weight:500;">${h.workerName}</td>
           <td style="font-family:monospace; font-size:13px; color:#3c4043;">${h.task}</td>
@@ -901,10 +910,89 @@ async function viewHitsList() {
       `;
     }).join('');
 
+    // Wire up Select All checkbox
+    if (selectAllCheckbox) {
+      selectAllCheckbox.onchange = (e) => {
+        const checked = e.target.checked;
+        const checkboxes = document.querySelectorAll('.select-hit-checkbox');
+        checkboxes.forEach(cb => cb.checked = checked);
+        updateBulkActionsToolbar();
+      };
+    }
+
+    // Wire up individual checkboxes
+    const checkboxes = document.querySelectorAll('.select-hit-checkbox');
+    checkboxes.forEach(cb => {
+      cb.onchange = () => {
+        const total = document.querySelectorAll('.select-hit-checkbox').length;
+        const checkedCount = document.querySelectorAll('.select-hit-checkbox:checked').length;
+        if (selectAllCheckbox) {
+          selectAllCheckbox.checked = (total === checkedCount && total > 0);
+        }
+        updateBulkActionsToolbar();
+      };
+    });
+
   } catch (err) {
     console.error(err);
   }
 }
+
+function updateBulkActionsToolbar() {
+  const selectedCheckboxes = document.querySelectorAll('.select-hit-checkbox:checked');
+  const count = selectedCheckboxes.length;
+  const toolbar = document.getElementById('bulk-actions-toolbar');
+  const selectedCountText = document.getElementById('selected-count');
+  
+  if (toolbar && selectedCountText) {
+    if (count > 0) {
+      selectedCountText.textContent = `${count} selected`;
+      toolbar.style.display = 'flex';
+    } else {
+      toolbar.style.display = 'none';
+    }
+  }
+}
+
+// Wire up bulk buttons
+document.getElementById('bulk-complete-btn').addEventListener('click', async () => {
+  const selectedCheckboxes = document.querySelectorAll('.select-hit-checkbox:checked');
+  const ids = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-id'));
+  if (ids.length === 0) return;
+  
+  if (!confirm(`Mark ${ids.length} selected HITs as complete?`)) return;
+  
+  try {
+    await fetchAPI('/hits/bulk-complete', {
+      method: 'POST',
+      body: JSON.stringify({ ids })
+    });
+    showBanner(apiSuccessBanner, `Bulk marked ${ids.length} HITs complete`);
+    viewHitsList();
+  } catch (err) {
+    console.error(err);
+  }
+});
+
+document.getElementById('bulk-delete-btn').addEventListener('click', async () => {
+  const selectedCheckboxes = document.querySelectorAll('.select-hit-checkbox:checked');
+  const ids = Array.from(selectedCheckboxes).map(cb => cb.getAttribute('data-id'));
+  if (ids.length === 0) return;
+  
+  if (!confirm(`Delete ${ids.length} selected HITs?`)) return;
+  
+  try {
+    await fetchAPI('/hits/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ ids })
+    });
+    showBanner(apiSuccessBanner, `Bulk deleted ${ids.length} HITs`);
+    viewHitsList();
+  } catch (err) {
+    console.error(err);
+  }
+});
+
 document.getElementById('search-hits').addEventListener('input', viewHitsList);
 
 function viewHitTask(url) {

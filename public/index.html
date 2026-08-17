@@ -513,8 +513,15 @@
       <!-- 8. Caught Hits (All Hits) List View -->
       <div class="tab-view" id="view-my-hits" style="display: none;">
         <div class="panel table-panel">
-          <div class="panel-header table-header">
-            <h2>All Hits Caught</h2>
+          <div class="panel-header table-header" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 16px;">
+              <h2>All Hits Caught</h2>
+              <div id="bulk-actions-toolbar" style="display: none; align-items: center; gap: 8px; background: #f1f3f4; padding: 6px 12px; border-radius: 6px; border: 1px solid #dadce0;">
+                <span id="selected-count" style="font-size: 13px; font-weight: 600; color: #5f6368;">0 selected</span>
+                <button type="button" class="primary-button small" id="bulk-complete-btn" style="background: #34a853; border-color: #34a853; height: 32px; padding: 0 12px; font-size: 12px;">Mark Selected Complete</button>
+                <button type="button" class="primary-button small" id="bulk-delete-btn" style="background: #ea4335; border-color: #ea4335; height: 32px; padding: 0 12px; font-size: 12px;">Delete Selected</button>
+              </div>
+            </div>
             <input type="text" class="search-input" id="search-hits" placeholder="Search Hits...">
           </div>
           <div class="panel-body">
@@ -522,6 +529,9 @@
               <table>
                 <thead>
                   <tr>
+                    <th style="width: 50px; text-align: center;">
+                      <input type="checkbox" id="select-all-hits" style="cursor: pointer; width: 16px; height: 16px; accent-color: #7465f4;">
+                    </th>
                     <th style="width: 80px;">S.NO</th>
                     <th>WORKER NAME</th>
                     <th>TASK</th>

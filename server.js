@@ -541,6 +541,34 @@ app.delete('/api/hits/:id', authenticateToken, (req, res) => {
   res.sendStatus(204);
 });
 
+app.post('/api/hits/bulk-complete', authenticateToken, (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ message: 'Invalid IDs format' });
+  
+  db.hits.forEach(h => {
+    if (ids.includes(h.id) || ids.includes(h._id)) {
+      h.status = 'Complete';
+    }
+  });
+  saveDB();
+  res.json({ message: 'Bulk completion successful' });
+});
+
+app.post('/api/hits/bulk-delete', authenticateToken, (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids)) return res.status(400).json({ message: 'Invalid IDs format' });
+  
+  db.hits = db.hits.filter(h => !ids.includes(h.id) && !ids.includes(h._id));
+  saveDB();
+  res.sendStatus(204);
+});
+
+app.post('/api/hits/clear-all', authenticateToken, (req, res) => {
+  db.hits = [];
+  saveDB();
+  res.sendStatus(204);
+});
+
 // 8. Users (Employees) CRUD
 app.get('/api/users', authenticateToken, (req, res) => {
   const search = (req.query.search || '').toLowerCase();

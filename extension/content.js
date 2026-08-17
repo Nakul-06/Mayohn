@@ -310,11 +310,16 @@ function scrapeHitsQueue() {
           if (lines.length > 0) requester = lines[0];
         }
 
-        // Parse time remaining
+        // Parse time remaining (e.g. 1:26:34 or 56:35 or 60 Min)
         let timeRemaining = '60 Min';
-        const timeMatch = text.match(/\d+\s*m(in)?s?\s*\d*\s*s?(ec)?s?|\d+\s*h(our)?s?\s*\d*\s*m(in)?s?/i);
-        if (timeMatch) {
-          timeRemaining = timeMatch[0].trim();
+        const colonMatch = text.match(/\d+:\d+:\d+|\d+:\d+/);
+        if (colonMatch) {
+          timeRemaining = colonMatch[0].trim();
+        } else {
+          const timeMatch = text.match(/\d+\s*m(in)?s?\s*\d*\s*s?(ec)?s?|\d+\s*h(our)?s?\s*\d*\s*m(in)?s?/i);
+          if (timeMatch) {
+            timeRemaining = timeMatch[0].trim();
+          }
         }
 
         discoveredHits.push({
