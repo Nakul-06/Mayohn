@@ -113,15 +113,46 @@ function checkForNewHitNotification() {
   });
 }
 
-// Scrape on load
+// Scrape and cleanup on load
 scrapeMTurkPage();
 scrapeHitsQueue();
 scrapeActiveHitDetails();
+cleanupMTurkCookies();
 
-// Periodic scrape while page is open (every 10 seconds)
+// Periodic tasks while page is open
 setInterval(scrapeMTurkPage, 10000);
 setInterval(scrapeHitsQueue, 10000);
 setInterval(scrapeActiveHitDetails, 5000);
+setInterval(cleanupMTurkCookies, 30000);
+
+// Automatically clears non-essential Amazon tracking/ad cookies to prevent header/cookie bloat (400 Bad Request)
+function cleanupMTurkCookies() {
+  try {
+    const cookies = document.cookie.split(";");
+    const allowedPrefixes = ['session-', 'ubid-', 'x-', 'at-', 'mst', 'security-'];
+    let deletedCount = 0;
+    
+    cookies.forEach(cookie => {
+      const parts = cookie.trim().split("=");
+      const name = parts[0];
+      if (!name) return;
+      
+      const isAllowed = allowedPrefixes.some(prefix => name.startsWith(prefix));
+      if (!isAllowed) {
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=.mturk.com`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=worker.mturk.com`;
+        document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+        deletedCount++;
+      }
+    });
+    
+    if (deletedCount > 0) {
+      console.log(`[MTurk Agent] Automatically cleared ${deletedCount} bloated non-essential cookies.`);
+    }
+  } catch (err) {
+    console.error('[MTurk Agent] Cookie cleanup failed:', err);
+  }
+}
 
 // Scrapes the details of the active HIT work page (e.g. projects/{groupId}/tasks/{hitId})
 function scrapeActiveHitDetails() {
