@@ -32,24 +32,44 @@ app.use((req, res, next) => {
 });
 
 // Helper to filter caught hits based on active TaskGroup configurations
-function shouldRegisterHit(groupId, requester) {
+function shouldRegisterHit(groupId, requester, reward) {
   if (!db.taskgroup) return false;
-  
+
+  // 1. Banned Requesters check (runs first in all cases)
+  if (db.taskgroup.bannedRequesters) {
+    const bannedList = db.taskgroup.bannedRequesters
+      .toLowerCase()
+      .split(',')
+      .map(r => r.trim())
+      .filter(Boolean);
+      
+    const reqLower = (requester || '').toLowerCase();
+    const isBanned = bannedList.some(banned => 
+      reqLower === banned || reqLower.includes(banned) || banned.includes(reqLower)
+    );
+    if (isBanned) {
+      console.log(`[WebSocket] Skipping caught HIT (Requester "${requester}" is in banned list)`);
+      return false;
+    }
+  }
+
+  // 2. Pathway 1: Unconditional Target URL/Group ID match
   const targetUrls = [
     db.taskgroup.url1,
     db.taskgroup.url2,
     db.taskgroup.url3,
     db.taskgroup.url4
   ].filter(Boolean).map(u => u.trim());
-  
-  if (targetUrls.length === 0) return false;
-  
+
   const isTargetUrl = targetUrls.some(url => {
     return url === groupId || url.includes(groupId) || groupId.includes(url);
   });
-  
-  if (isTargetUrl) return true;
-  
+
+  if (isTargetUrl) {
+    return true; // Match unconditionally ("under no objection")
+  }
+
+  // Also check if matches target names configured in TaskGroup
   const targetNames = [
     db.taskgroup.url1Name,
     db.taskgroup.url2Name,
@@ -58,10 +78,19 @@ function shouldRegisterHit(groupId, requester) {
   ].filter(Boolean).map(n => n.trim().toLowerCase());
   
   const isTargetName = targetNames.some(name => {
-    return name === requester.toLowerCase() || requester.toLowerCase().includes(name);
+    const reqLower = (requester || '').toLowerCase();
+    return name === reqLower || reqLower.includes(name) || name.includes(reqLower);
   });
+
+  if (isTargetName) {
+    return true;
+  }
+
+  // 3. Pathway 2: General Catcher (Satisfies minReward)
+  const rewardVal = parseFloat(reward) || 0;
+  const minReward = parseFloat(db.taskgroup.minReward || 0);
   
-  return isTargetUrl || isTargetName;
+  return rewardVal >= minReward;
 }
 
 // ==========================================================================
@@ -108,19 +137,7 @@ let db = {
     interval: 60,
     bannedRequesters: ""
   },
-  hits: [
-    {
-      id: "hit_1",
-      _id: "hit_1",
-      workerName: "RDP-Worker-01",
-      task: "https://worker.mturk.com/projects/3XYZ/tasks",
-      requester: "Academic Studies Group",
-      reward: 1.50,
-      status: "Active",
-      timeRemaining: "45 Min",
-      timestamp: Date.now()
-    }
-  ],
+  hits: [],
   accountsStatus: [
     {
       workerId: "A3ABC123XYZ456",
@@ -907,7 +924,9 @@ wss.on('connection', (ws, req) => {
           const activeScrapedUrls = new Set();
           
           data.hits.forEach(qHit => {
-            if (!shouldRegisterHit(qHit.groupId, qHit.requester)) {
+            const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
+            
+            if (!shouldRegisterHit(qHit.groupId, qHit.requester, payoutVal)) {
               return;
             }
 
@@ -937,7 +956,6 @@ wss.on('connection', (ws, req) => {
             }
 
             if (!existingHit) {
-              const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
               const newHit = {
                 id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
                 _id: `hit_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -975,7 +993,6 @@ wss.on('connection', (ws, req) => {
                 existingHit.taskUrl = targetTaskUrl;
                 hitChanged = true;
               }
-              const payoutVal = parseFloat(qHit.reward.replace(/[^0-9.]/g, '')) || 0.00;
               if (existingHit.reward !== payoutVal) {
                 existingHit.reward = payoutVal;
                 hitChanged = true;
