@@ -208,5 +208,113 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'trigger_queue_scrape') {
     console.log('[MTurk Agent] Triggered immediate queue scrape...');
     scrapeHitsQueue();
+  } else if (message.type === 'taskgroup_config') {
+    console.log('[MTurk Agent] Received updated TaskGroup config:', message.taskgroup);
+    updateTaskgroupConfig(message.taskgroup);
   }
 });
+
+// ==========================================================================
+// TAB-LEVEL AUTO-ACCEPTOR LOOP (RUNS IN LOGGED-IN SESSION CONTEXT)
+// ==========================================================================
+let activeTaskgroup = null;
+let acceptIntervalId = null;
+let currentlyFetching = false;
+
+function getAcceptUrl(inputUrlOrGroupId) {
+  if (!inputUrlOrGroupId) return null;
+  const trimmed = inputUrlOrGroupId.trim();
+  if (trimmed.includes('accept_random')) {
+    return trimmed;
+  }
+  if (trimmed.includes('projects/')) {
+    const match = trimmed.match(/projects\/([A-Z0-9]+)/i);
+    if (match) {
+      return `https://worker.mturk.com/projects/${match[1]}/tasks/accept_random`;
+    }
+  }
+  if (/^[A-Z0-9]+$/i.test(trimmed)) {
+    return `https://worker.mturk.com/projects/${trimmed}/tasks/accept_random`;
+  }
+  return null;
+}
+
+function updateTaskgroupConfig(config) {
+  activeTaskgroup = config;
+  
+  if (acceptIntervalId) {
+    clearInterval(acceptIntervalId);
+    acceptIntervalId = null;
+  }
+
+  if (!activeTaskgroup || !activeTaskgroup.status) {
+    console.log('[MTurk Agent] Auto-accept is disabled in settings.');
+    return;
+  }
+
+  const targets = [
+    activeTaskgroup.url1,
+    activeTaskgroup.url2,
+    activeTaskgroup.url3,
+    activeTaskgroup.url4
+  ].filter(Boolean).map(url => getAcceptUrl(url)).filter(Boolean);
+
+  if (targets.length === 0) {
+    console.log('[MTurk Agent] No target URLs configured for auto-accept.');
+    return;
+  }
+
+  const intervalMs = parseInt(activeTaskgroup.interval, 10) || 1000;
+  console.log(`[MTurk Agent] Starting auto-accept loop for:`, targets, `at ${intervalMs}ms`);
+
+  acceptIntervalId = setInterval(async () => {
+    if (currentlyFetching) return;
+    currentlyFetching = true;
+
+    for (const acceptUrl of targets) {
+      try {
+        console.log(`[MTurk Agent] Checking/Accepting: ${acceptUrl}`);
+        const response = await fetch(acceptUrl);
+        const text = await response.text();
+
+        const isAccepted = text.includes('assigned_to_user') || 
+                           text.includes('Time Elapsed') || 
+                           text.includes('time_elapsed') ||
+                           text.includes('Submit') ||
+                           (response.url.includes('/tasks/') && !response.url.includes('accept_random'));
+
+        if (isAccepted) {
+          console.log(`[MTurk Agent] SUCCESS! Auto-accepted HIT: ${acceptUrl}`);
+          
+          const groupIdMatch = acceptUrl.match(/projects\/([A-Z0-9]+)\/tasks/i);
+          const groupId = groupIdMatch ? groupIdMatch[1] : 'Unknown-HIT';
+
+          // Tell background script to trigger a notification to the Sphinx Portal
+          chrome.runtime.sendMessage({
+            type: 'new_hit_notification',
+            message: `Successfully accepted target HIT Group: ${groupId}`
+          });
+
+          // Instantly scrape queue to sync active countdown timer to dashboard
+          scrapeHitsQueue();
+        }
+      } catch (err) {
+        console.error('[MTurk Agent] Auto-accept fetch failed:', err);
+      }
+    }
+
+    currentlyFetching = false;
+  }, intervalMs);
+}
+
+// Request initial taskgroup config on load
+try {
+  chrome.runtime.sendMessage({ type: 'get_taskgroup_config' }, (response) => {
+    if (response && response.taskgroup) {
+      console.log('[MTurk Agent] Loaded initial TaskGroup config:', response.taskgroup);
+      updateTaskgroupConfig(response.taskgroup);
+    }
+  });
+} catch (e) {
+  console.warn('[MTurk Agent] Failed to query initial config from background script.');
+}

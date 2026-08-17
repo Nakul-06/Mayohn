@@ -47,6 +47,16 @@ function connectToServer() {
         const data = JSON.parse(event.data);
         if (data.type === 'taskgroup_update') {
           activeTaskgroupConfig = data.taskgroup;
+          chrome.tabs.query({ url: '*://worker.mturk.com/*' }, (tabs) => {
+            tabs.forEach(tab => {
+              try {
+                chrome.tabs.sendMessage(tab.id, {
+                  type: 'taskgroup_config',
+                  taskgroup: activeTaskgroupConfig
+                });
+              } catch (e) {}
+            });
+          });
           startAutoAcceptLoop();
         }
       } catch (err) {
@@ -145,6 +155,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       else connectToServer();
     });
   } 
+  
+  else if (message.type === 'get_taskgroup_config') {
+    sendResponse({ taskgroup: activeTaskgroupConfig });
+  }
   
   else if (message.type === 'get_status') {
     sendResponse({
