@@ -685,18 +685,16 @@
       const cells = row.querySelectorAll("td");
       if (cells.length >= 7) {
         const timeText = cells[6].textContent.trim();
-        if (timeText === "Expired" || timeText.includes("Calculating")) {
+        if (timeText === "Expired" || timeText.includes("Calculating")|| timeText === "0:00 remaining") {
           row.remove();
         }
       }
     });
   }
 
-  // Run cleanup every 30 seconds
-  setInterval(cleanupHits, 30000);
+  // Run cleanup every 5 seconds
+  setInterval(cleanupHits, 5000);
 
-  // Run once immediately after page load
-  window.addEventListener("load", cleanupHits);
 </script>
 </body>
 </html>

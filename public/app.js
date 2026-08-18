@@ -909,7 +909,10 @@ async function viewHitsList() {
         </tr>
       `;
     }).join('');
-
+    
+    // run cleanup immediately after rendering
+       cleanupHits();
+       
     // Wire up Select All checkbox
     if (selectAllCheckbox) {
       selectAllCheckbox.onchange = (e) => {
