@@ -717,7 +717,7 @@ console.log('MTurk Auto Close Script Loaded');
   }
 })();
   `);
-});*/
+});*/ 
 
 app.get('/api/hit-fetch', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
