@@ -705,7 +705,7 @@ console.log('MTurk Auto Checker - Script Loaded for workerId: ${req.query.worker
   `);
 });
 
-app.get('/api/tab-manager', (req, res) => {
+/*app.get('/api/tab-manager', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
   res.send(`
 console.log('MTurk Auto Close Script Loaded');
@@ -717,7 +717,7 @@ console.log('MTurk Auto Close Script Loaded');
   }
 })();
   `);
-});
+});*/
 
 app.get('/api/hit-fetch', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript');
