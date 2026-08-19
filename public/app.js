@@ -878,7 +878,13 @@ async function viewHitsList() {
       return;
     }
 
-    tbody.innerHTML = res.items.map((h, index) => {
+   // Filter out unwanted rows before rendering
+      const filteredItems = res.items.filter(h => {
+      const time = (h.timeRemaining || "").toLowerCase();
+      return !(time.includes("expired") || time.includes("calculating") || time.includes("0:00"));
+    });
+ 
+    tbody.innerHTML = filteredItems.map((h, index) => {
       const isComplete = h.status === 'Complete';
       const completeLink = isComplete 
         ? '<span style="color:#10b981; font-weight:600;">Set as Complete</span>'
@@ -910,8 +916,6 @@ async function viewHitsList() {
       `;
     }).join('');
     
-    // run cleanup immediately after rendering
-       cleanupHits();
        
     // Wire up Select All checkbox
     if (selectAllCheckbox) {
