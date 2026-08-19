@@ -878,11 +878,32 @@ async function viewHitsList() {
       return;
     }
 
-   // Filter out unwanted rows before rendering
+  // Get banned requesters from the settings input
+       const bannedRequestersInput = document.getElementById('taskgroup-bannedRequesters').value || '';
+       const bannedList = bannedRequestersInput
+      .toLowerCase()
+      .split(',')
+      .map(r => r.trim())
+      .filter(Boolean);
+  
+      // Filter out unwanted rows before rendering
       const filteredItems = res.items.filter(h => {
       const time = (h.timeRemaining || "").toLowerCase();
-      return !(time.includes("expired") || time.includes("calculating") || time.includes("0:00"));
-    });
+      const requester = (h.requester || "").toLowerCase();
+     // return !(time.includes("expired") || time.includes("calculating") || time.includes("0:00"));
+     
+      // Skip expired/calculating/0:00
+        if (time.includes("expired") || time.includes("calculating") || time.includes("0:00")) {
+        return false;
+        }
+
+      // Skip banned requesters
+        if (bannedList.includes(requester)) {
+        return false;
+        }
+
+        return true;
+        });
  
     tbody.innerHTML = filteredItems.map((h, index) => {
       const isComplete = h.status === 'Complete';
