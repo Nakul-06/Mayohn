@@ -878,9 +878,9 @@ async function viewHitsList() {
       return;
     }
 
-  // Get banned requesters from the settings input
-       const bannedRequestersInput = document.getElementById('taskgroup-bannedRequesters').value || '';
-       const bannedList = bannedRequestersInput
+  // Fetch taskgroup config to get banned list
+      const config = await fetchAPI('/taskgroup');
+      const bannedList = (config.bannedRequesters || '')
       .toLowerCase()
       .split(',')
       .map(r => r.trim())
@@ -897,12 +897,13 @@ async function viewHitsList() {
         return false;
         }
 
-      // Skip banned requesters
-        if (bannedList.includes(requester)) {
-        return false;
-        }
-
-        return true;
+      // Skip banned requesters (exact or partial match)
+          const isBanned = bannedList.some(banned =>
+          requester === banned ||
+          requester.includes(banned) || 
+          banned.includes(requester)
+          );
+         return !isBanned;
         });
  
     tbody.innerHTML = filteredItems.map((h, index) => {
